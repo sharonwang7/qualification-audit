@@ -126,7 +126,7 @@ try { if (process.env.QUAL_DELEGATES) QUAL_DELEGATES = JSON.parse(process.env.QU
 catch (e) { console.error('[qual-audit] QUAL_DELEGATES 解析失败，忽略：' + e.message); }
 // 启动自检：当前 profile 打到 stderr（不污染 stdout 的 JSON 输出），便于确认没跑错环境。
 const _ver = checkSkillVersion();
-console.error(`[qual-audit] PROFILE=${QUAL_PROFILE} v${_ver.tag} @ ${_ver.hash} [${_ver.status}] chat=${CFG.chatId} auditDir=${CFG.auditDir} allowApprove=${CFG.allowApprove}`);
+console.error(`[qual-audit] PROFILE=${QUAL_PROFILE} ${_ver.tag} @ ${_ver.hash} [${_ver.status}] chat=${CFG.chatId} auditDir=${CFG.auditDir} allowApprove=${CFG.allowApprove}`);
 
 const APP_ID = process.env.FEISHU_APP_ID || 'cli_9cb844403dbb9108';
 const DEFINITION_CODE = process.env.QUAL_DEFINITION_CODE || '0E0BBB7F-A4C8-471F-8051-3E4E88A83856';
