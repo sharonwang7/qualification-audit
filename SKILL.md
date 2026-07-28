@@ -103,7 +103,7 @@ cd <技能包根目录>
 
 🔴【落盘是强制终点，不是可选】：分析了但没 write-result = 这条【等于没做】。请把 10min 预算优先留给"分析完→立刻写 `result_<instance_code>.json`→立刻 `write-result` 到 ok:true→再回话"，宁可分析粗一点也【必须先落盘成功再回话】。
 
-判断规格【只读这一个文件、它自包含】：`references/child-judge.md`（含 资质分类/场景速查+各场景判据内联/附件铁律/三阶段要点/result schema/落盘终点）。🔴 **场景判据已【全部内联】在 child-judge.md 的 0b 表——判断时【不要】去读 `scene-principles.md` / `analysis-protocol.md`（会耗光你的时间预算）**；只有极罕见、child-judge 里明确写「见 analysis-protocol」的证据链层级那一处才去查。**也不要读整份 SKILL.md**（父的编排规格，你用不到）。
+判断规格【优先读场景子文件、回退读全量】：先读 `case` 返回的 `scoped_rules` → `matched_scenes` → 只读对应场景的 JSON（`references/scenes/<scene>.json`）+ 公共判据（`references/scenes/common.json`）。场景覆盖不到的边缘情况才回退读 `references/child-judge.md`。🔴 **场景判据已全部按需注入到场景 JSON 的 `criteria` 字段——不要自己去读** `scene-principles.md` / `analysis-protocol.md`（会耗光你的时间预算）；只有极罕见、JSON 里明确写「见 child-judge」处才去查。**也不要读整份 SKILL.md**（父的编排规格，你用不到）。
 
 ⏱️ **一遍过【铁律·省时间】**：拿到 case 数据 + child-judge 判据后，【一次性】做完三阶段并落盘——中途【不要再读别的文件、不要再跑别的脚本、不要反复轮询】。你的判断力没问题，别把时间耗在"找资料/等脚本/翻页定位"这些导航动作上（这是历史上超时的真凶）。
 
