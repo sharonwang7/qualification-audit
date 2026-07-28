@@ -52,13 +52,25 @@ const connector = require('../lib/connector-feishu.js');
 // 每次命令执行前记录 git 版本、最新 tag 和脏状态，方便生产审计和回滚
 function checkSkillVersion() {
   try {
-    // 合并为 2 条命令 + windowsHide:true → 弹窗从 4→2 个，且全隐藏
     const tag = execSync('git describe --tags --abbrev=0', { cwd: __dirname, encoding: 'utf8', timeout: 3000, windowsHide: true }).trim();
     const latest = execSync('git tag --sort=-creatordate', { cwd: __dirname, encoding: 'utf8', timeout: 3000, windowsHide: true }).split('\n')[0].trim();
     const dirty = execSync('git ls-files --modified --deleted --exclude-standard', { cwd: __dirname, encoding: 'utf8', timeout: 3000, windowsHide: true }).trim();
     const hash = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', timeout: 3000, windowsHide: true }).trim();
-    const status = dirty ? '\u26a0\ufe0f DIRTY' : (tag !== latest ? `\u26a0\ufe0f BEHIND(latest=${latest})` : 'clean');
-    return { tag, hash, latest, dirty: !!dirty, status };
+    // 远程同步检测（v2.4.0）：不 pull，只查看远程最新 tag。断网/无远程→静默
+    let remoteLatest = null;
+    try {
+      const remoteTags = execSync('git ls-remote --tags --refs --sort=-version:refname origin', { cwd: __dirname, encoding: 'utf8', timeout: 4000, windowsHide: true }).trim();
+      if (remoteTags) {
+        remoteLatest = remoteTags.split('\n')[0].replace(/^.*refs\/tags\//, '');
+      }
+    } catch (e) { /* 断网/无远程 → 静默 */ }
+    // 状态组合
+    let status;
+    if (dirty) status = '\u26a0\ufe0f DIRTY';
+    else if (remoteLatest && remoteLatest !== tag) status = `\u26a0\ufe0f REMOTE(${remoteLatest})`;
+    else if (tag !== latest) status = `\u26a0\ufe0f BEHIND(latest=${latest})`;
+    else status = 'clean';
+    return { tag, hash, latest, remoteLatest, dirty: !!dirty, status };
   } catch (e) {
     return { tag: 'unknown', hash: 'unknown', status: 'no-git' };
   }
