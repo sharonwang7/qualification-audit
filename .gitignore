@@ -13,6 +13,7 @@ fando-ocr-cache/
 # 运行产物
 result_*.json
 tmp_*.cjs
+_at_*.json
 
 # Node
 node_modules/
