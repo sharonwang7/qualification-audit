@@ -54,7 +54,7 @@ function checkSkillVersion() {
   try {
     const tag = execSync('git describe --tags --abbrev=0', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).trim();
     const latest = execSync('git tag --sort=-creatordate', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).split('\n')[0].trim();
-    const dirty = execSync('git status --porcelain', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).trim();
+    const dirty = execSync('git ls-files --modified --deleted --exclude-standard', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).trim();
     const hash = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).trim();
     const status = dirty ? '\u26a0\ufe0f DIRTY' : (tag !== latest ? `\u26a0\ufe0f BEHIND(latest=${latest})` : 'clean');
     return { tag, hash, latest, dirty: !!dirty, status };
