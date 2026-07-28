@@ -1,27 +1,30 @@
-# 数据卫生（F11/C5/C6）：以下为运行产物/真实数据/凭证，绝不随 skill 包分发或入库。
-# 注意：本文件只阻止"分发/提交"时携带；已存在的同名文件需另行清理（见 SKILL 维护说明）。
-
-# 临时运行产物（含真实表单/评论原文，崩溃残留）
+# 临时文件 / 缓存
+*_watermark*.txt
+*_fair_reason_*.txt
 scratch/
-scratchpad/
-_at_*.json
-_p_*.json
-_b_*.json
-_d_*.json
-_api_p_*.json
-_card_from_json.json
-*.lock
+_cache/
+temp/
 *.tmp
+.venv/
 
-# 本机配置与凭证（仅 .env.example 入库，占位值）
-.env
-
-# 真实审核报告/状态机（若曾误落包内；正常应在 D:\agent-hub 或 QUAL_AUDIT_DIR 下）
-audit_reports/
-pending_actions.json
-
-# OCR/附件缓存（若曾误落包内）
+# OCR 缓存（体积大、包含附件）
 fando-ocr-cache/
 
-# 测试/回归运行残留
-examples/golden_set/**/case.json
+# 运行产物
+result_*.json
+tmp_*.cjs
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# 备份（统一用 git 管理）
+*.bak*
+!*.bak.golden*
+
+# OS
+Thumbs.db
+.DS_Store
