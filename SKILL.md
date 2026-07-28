@@ -11,6 +11,8 @@ description: |
 
 > ⚠️ **运行环境**：当前路径约定针对 Windows（`D:\`、`C:\`）；Linux/Mac 需适配 `QUAL_ATTACH_DIR`、`QUAL_SOFFICE_BIN`、`QUAL_CARD_SCRIPT` 等路径类环境变量。
 
+> 📦 **首次使用？** 请先阅读 [install.md](install.md) 完成环境配置。
+
 > **环境依赖**：PyMuPDF ✅ | python-docx ✅ | ocr-paddle(PP-OCRv5 经典管线，独立 skill 包) ✅ | LibreOffice ✅（可选；未装则 .doc/非标DOCX 标 failed → 转人工）
 > 附件读取全部由 `audit-tool.cjs`(data-prep) 完成，分诊策略/status 语义/OCR 降级等详细规范：读取并遵循 [references/attachment-reading-spec.md](references/attachment-reading-spec.md)；判断侧"读不出字≠没问题"的处理铁律见 [references/child-judge.md](references/child-judge.md) 附件铁律节。
 
