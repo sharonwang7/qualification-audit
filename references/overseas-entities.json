@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "last_updated": "2026-06-23",
+    "source": "飞书文档 海外主体基础信息20260623",
+    "source_token": "Tg0UdRq8mot7htxDZv5cup4mnMb",
+    "owner": "王颖桢"
+  },
+  "overseas_entities": [
+    {
+      "name_zh": "越南凡岛有限责任公司",
+      "name_en": "FANDOW VIETNAM COMPANY LIMITED",
+      "name_local": "CÔNG TY TNHH FANDOW VIỆT NAM",
+      "country": "越南",
+      "tax_id": "0318499648",
+      "address": "55 Hồ Hảo Hớn, Phường Cầu Ông Lãnh, TP Hồ Chí Minh, Việt Nam",
+      "established": "2024-06-10",
+      "registered_capital": "VND 72000000 (USD 3000)",
+      "shareholder": "BUI DUY LINH",
+      "legal_representative": "黄树强",
+      "bank": "Vietcombank VND:1048757346 / USD:1048757501"
+    },
+    {
+      "name_zh": "香港凡岛网络科技有限公司",
+      "name_en": "Fandow Network (HK) Technology Limited",
+      "country": "中国香港",
+      "address": "Rooms06,13A/F,South Tower,World Finance Centre,Harbour City,No.17 Canton Road,Tsim ShaTsui,Kowloon,HongKong",
+      "established": "2020-09-04",
+      "registered_capital": "500万港币（认缴制）",
+      "shareholder": "广东凡岛网络科技有限公司（100%）",
+      "director": "黎文祥",
+      "bank": "香港汇丰银行 741615199838"
+    },
+    {
+      "name_zh": "凡岛网络科技私人有限公司",
+      "name_en": "FANDOW NETWORK TECHNOLOGY SDN. BHD.",
+      "country": "马来西亚",
+      "registration_no": "1510869-D",
+      "address": "LEVEL 29.04, EXCHANGE 106, LINGKARAN TRX, TUN RAZAK EXCHANGE (TRX), 55188 KUALA LUMPUR, MALAYSIA",
+      "established": "2023-05-08",
+      "registered_capital": "2000马币（实缴制）",
+      "shareholder": "香港凡岛网络科技有限公司（100%）",
+      "director": "黎文祥",
+      "bank": "无"
+    }
+  ],
+  "ownership_structure": "广东凡岛网络科技有限公司 → 香港凡岛网络科技有限公司(100%) → 马来西亚凡岛网络科技私人有限公司(100%); 越南凡岛有限责任公司(个人独资)"
+}

@@ -1,0 +1,15 @@
+{
+  "case_id": "202605270092",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=377A2A9D-D6ED-485B-BDC0-08F6D620B4A2&source=bitable&path=pages/detail/index?instanceId=377A2A9D-D6ED-485B-BDC0-08F6D620B4A2&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "银行",
+  "known_ai_miss": true,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": ["R05", "R08", "R11"],
+    "rules_not_fired": ["R01", "R02", "R03", "R04", "R06", "R07", "R09", "R10"]
+  },
+  "_note": "扁平 schema。known_ai_miss=true（AI=应通过 ≠ 人工=待补充）。R11 触发：对方要求出具资质的截图附件字段=[]（空），旧表单用的是'附件（对方要求出具资质的截图）'字段名，R11 checker 无法识别。R08 触发（minor）。R05 触发 SUPPLEMENT（F17 修复后复活：法人资质[法定代表人特殊信息]缺平台截图/双章合同→提醒补证据，与人工'待补充'一致）。"
+}

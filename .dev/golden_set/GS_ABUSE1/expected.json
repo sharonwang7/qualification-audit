@@ -1,0 +1,14 @@
+{
+  "case_id": "ABUSE-0001",
+  "ground_truth_source": "invariant",
+  "conclusion_key": "request_info",
+  "scene": "合作",
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": ["R02", "R03", "R08", "R11"],
+    "rules_not_fired": ["R01", "R04", "R05", "R07", "R09", "R10"]
+  },
+  "_note": "F1 不变量守护：外部主体名仅含内部别名子串'凡岛'，绝不可 auto_approve=true。auto_approve 必须 false。"
+}

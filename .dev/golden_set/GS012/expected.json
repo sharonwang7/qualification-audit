@@ -1,0 +1,29 @@
+{
+  "case_id": "202602040131",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=71B7356B-9AC0-4C7B-99E5-FE1F7169F820&source=bitable&path=pages/detail/index?instanceId=71B7356B-9AC0-4C7B-99E5-FE1F7169F820&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "合作",
+  "known_ai_miss": true,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": [
+      "R02",
+      "R04",
+      "R12"
+    ],
+    "rules_not_fired": [
+      "R01",
+      "R03",
+      "R05",
+      "R06",
+      "R07",
+      "R08",
+      "R09",
+      "R10",
+      "R11"
+    ]
+  },
+  "_note": "扁平 schema。旧版表单格式。scope-filter 修复后 in_scope=true（拟用资质='品牌授权书（总经办）'命中）。R11 修复后不触发（旧字段名别名已覆盖）。R02 触发 CONFIRM（F23 修复后：附件含'合同'+'盖章/签字'关键词→提醒确认双章而非静默放行；comment_attach_1.pdf 确含 KONO KA代理商合同双章全文，agent 应确认其有效性）。R03 不触发（attach_2.jpg含真实日期'2025年12月31日'）。R04 触发（品牌授权书 CONFIRM 提醒，始终激活）。R07 不触发（'转让本授权'≠'转授权'，不命中）。R09 已删除（非政策）。人工结论=待补充（合同已过期，需续签）。known_ai_miss=true（AI结论=应通过）。"
+}

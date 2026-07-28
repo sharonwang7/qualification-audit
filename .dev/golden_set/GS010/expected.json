@@ -1,0 +1,29 @@
+{
+  "case_id": "202603300047",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=DB1B0CC7-B35C-46EF-B4E6-BB39DB8698D8&source=bitable&path=pages/detail/index?instanceId=DB1B0CC7-B35C-46EF-B4E6-BB39DB8698D8&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "pass",
+  "scene": "平台",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": [
+      "R10",
+      "R12"
+    ],
+    "rules_not_fired": [
+      "R01",
+      "R02",
+      "R03",
+      "R04",
+      "R05",
+      "R06",
+      "R07",
+      "R08",
+      "R09",
+      "R11"
+    ]
+  },
+  "_note": "扁平 schema。旧版表单格式。scope-filter 修复后 in_scope=true（拟用资质='商标注册证（总经办）'命中）。R11 修复后不触发（旧字段名别名已覆盖）。R01 不触发（提供商标注册号=7629781已填）。R10 触发（商标注册证一式一份 CONFIRM 提醒，始终激活）。R08 不触发（使用平台='天猫WIS旗舰店'有值）。申请事由仅11字，但结合附件（买家纠纷截图+审批聊天记录）背景清楚，人工判定应通过。known_ai_miss=false。"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "GS023",
+  "person": "张媛",
+  "instance_code": "待补(未落盘·batch 20260708 中 skip 未写 report)",
+  "snapshot": "单次(越界skip正例)",
+  "scene": "越界(其它类·非总经办管辖)",
+  "trap": "越界skip——申请资质=『其它』类=法大大电子签平台账号开通，附件文本无总经办管辖资质词(法人/品牌/商标/授权书类)命中→in_scope=false、SCOPE_CHK 判 out-of-scope→should_skip=true(审核 bot 不处理)。",
+  "_status": "待补：本件 batch 20260708 中越界 skip、未落盘 report，无 D:\\fando-ocr-cache 缓存。以下 form 依 trap 描述重建，字段为占位/近似，真实 instance_code、事由原文、附件内容待补齐后再校准。in_scope=false 为可断言的硬不变量；should_skip 由 cmdCase(其它类+附件无管辖资质词)下判，runner 不复算。",
+  "form": {
+    "申请资质": [
+      "其它"
+    ],
+    "公司主体": [
+      "待补"
+    ],
+    "资质流向方全称（公司/自然人/平台）": "法大大(电子签平台)",
+    "是否跟对方存在合作关系": "否",
+    "是否为新项目": "否",
+    "申请事由": "法大大电子签平台账号开通(占位·待补真实事由原文)",
+    "合同明细": ""
+  },
+  "attachments": [
+    {
+      "source": "待补",
+      "type": "unknown",
+      "summary": "待补：附件文本应无总经办管辖资质词(法人/品牌/商标/授权书类)命中，故 OTHER_CHK 不翻 inScope=true。"
+    }
+  ],
+  "comments": []
+}

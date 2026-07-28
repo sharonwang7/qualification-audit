@@ -1,0 +1,15 @@
+{
+  "case_id": "202606050037",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=FAEF1242-EE8D-468B-8637-3D2D9843C637&source=bitable&path=pages/detail/index?instanceId=FAEF1242-EE8D-468B-8637-3D2D9843C637&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "合作",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": ["R08"],
+    "rules_not_fired": ["R01", "R02", "R03", "R04", "R06", "R07", "R09", "R10", "R11"]
+  },
+  "_note": "扁平 schema。known_ai_miss=false（AI=待补充 = 人工=待补充）。R11 不触发：对方要求出具资质的截图附件字段有值。R08 触发（minor）。AI 评论将'❌未提供对方要求出具资质的截图'列为问题，但业务实际已上传截图（合作商系统截图），AI 漏读。"
+}

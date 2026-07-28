@@ -1,0 +1,14 @@
+{
+  "case_id": "ABUSE-0002",
+  "ground_truth_source": "invariant",
+  "conclusion_key": "pass",
+  "scene": "合作",
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": true,
+    "rules_fired": ["R02", "R03", "R08", "R11"],
+    "rules_not_fired": ["R01", "R04", "R05", "R07", "R09", "R10"]
+  },
+  "_note": "F1 对照组：内部主体登记全称应 auto_approve=true（合法内部授权 fast-track）。守护修复没误杀合法内部授权。"
+}

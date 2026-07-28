@@ -1,0 +1,15 @@
+{
+  "case_id": "202606010176",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=81478353-419D-453B-9ECF-D9F06B5AE18F&source=bitable&path=pages/detail/index?instanceId=81478353-419D-453B-9ECF-D9F06B5AE18F&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "平台",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": ["R08"],
+    "rules_not_fired": ["R01", "R02", "R03", "R04", "R06", "R07", "R09", "R10", "R11"]
+  },
+  "_note": "扁平 schema。known_ai_miss=false（AI=待补充 = 人工=待补充）。R11 不触发（deterministic-rules.json v2：'附件（对方要求出具资质的截图）'已加为 R11 别名，该字段有值）。R08 触发（MINOR）：申请事由中无平台名关键词，使用平台字段不存在于此表单格式。attach_1.docx 和 comment_attach_3.docx GBK乱码，依 comment_attach_1.png 可辨认为授权委托书。"
+}

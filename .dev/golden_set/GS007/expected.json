@@ -1,0 +1,15 @@
+{
+  "case_id": "202605270109",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=E9902DE4-1A5E-41BF-A9E3-6EAF4FA7292B&source=bitable&path=pages/detail/index?instanceId=E9902DE4-1A5E-41BF-A9E3-6EAF4FA7292B&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "平台",
+  "known_ai_miss": true,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": ["R08"],
+    "rules_not_fired": ["R01", "R02", "R03", "R04", "R06", "R07", "R09", "R10", "R11"]
+  },
+  "_note": "扁平 schema。known_ai_miss=true（AI=应通过 ≠ 人工=待补充）。R11 不触发（deterministic-rules.json v2：'附件（对方要求出具资质的截图）'已加为 R11 别名，该字段有值）。R08 触发（MINOR）：申请事由和表单中无具体平台名关键词（抖音虽为资质流向方但不在 R08 事由关键词检测范围内）。"
+}

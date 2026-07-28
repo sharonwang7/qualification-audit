@@ -1,0 +1,30 @@
+{
+  "case_id": "GS018",
+  "ground_truth_source": "human(2026-07-08 revisions n=33)",
+  "conclusion_key": "request_info",
+  "scene": "合作/租赁签约",
+  "snapshot": "单次(需补充正例·业务必要性并板+缺Q2)",
+  "trap": "WR_G5",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": [
+      "R05",
+      "R08",
+      "R11"
+    ]
+  },
+  "must_points": [
+    "阶段二必须四板块独立：看流向 / 看用途 / 业务必要性(Q1+Q2分列) / 主体必要性——业务必要性单独成块，不得揉进『看流向/看用途』",
+    "Q1(触发条件)成立：场地变更需重签租赁合同；Q2(强制必要性)未完全闭合：流向方『鑫昱隆』与截图收件方『联合社区东区招商部』主体一致性未证",
+    "结论=需补充：先澄清主体关系(或更正流向方字段)+加限定水印后放行"
+  ],
+  "forbid_points": [
+    "业务必要性被并入『看流向/看用途』板块(缺陷版原形态)",
+    "缺 Q2 强制必要性判定",
+    "凭主体一致性存疑直接判退回(应为需补充)"
+  ],
+  "_note": "2026-07-08 落成。缺陷版把业务必要性揉进看流向/看用途、缺 Q2；修正版四板块独立+Q1/Q2分列。rules_fired=当前 checker 在本 input 实际触发(锁基线)。结论层由 agent 按 SKILL 审一遍对照，runner 不自动断言。R05/R11/R08 由法人资质+对方要求截图字段+平台名缺失触发。"
+}

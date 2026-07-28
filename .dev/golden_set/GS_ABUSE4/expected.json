@@ -1,0 +1,15 @@
+{
+  "case_id": "ABUSE-0005",
+  "ground_truth_source": "invariant",
+  "conclusion_key": "skip",
+  "scene": "越界",
+  "in_scope": false,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": ["R08", "R11"],
+    "rules_not_fired": []
+  },
+  "_note": "F5 印章归属不变量：发货专用章=行政，绝不可 in_scope=true。总经办管辖印章仅法人章/法定代表人章。守护 2026-07-06 王爷定界，防『专用章/公章/印章』词根被重新加入 MY_AUDIT_QUALS。【守护点只有 in_scope=false 这一条】——加了词根 in_scope 就翻 true，本例立刻挂。",
+  "_fixture_fix_20260717": "本用例 2026-07-06 建成后从未绿过（should_skip/rules_fired 两条断言与生产真值不符，T1 恒红→退出码恒 1→回归网形同虚设）。2026-07-17 经核 audit-tool.cjs:822-853 与 924 后修正为生产真值：①should_skip 不是越界信号——它在 deterministic-checker.js:402 只表示『内部授权件可跳』，越界件生产真值=false（should_skip=true 在生产仅来自 audit-tool.cjs:810 的『审批已完成/领取节点』gate）；越界的落地判据是 OR：audit-tool.cjs:1298 `in_scope===false || should_skip===true`，故 in_scope=false 单独即可跳过，边界始终有效。②rules_fired 改记生产快照：越界件在 case 阶段照样跑红线（audit-tool.cjs:853 无 in_scope 短路），只是结果因 in_scope=false 从不被采用；锁快照可额外守 deterministic 对本输入的行为漂移。"
+}

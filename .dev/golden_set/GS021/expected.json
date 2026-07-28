@@ -1,0 +1,29 @@
+{
+  "case_id": "GS021",
+  "ground_truth_source": "human(2026-07-08 report n=36)",
+  "conclusion_key": "pass",
+  "scene": "内部自用·荣誉证书用章",
+  "snapshot": "单次(通过正例)",
+  "trap": "I01·内部荣誉证书用章直接通过",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": [
+      "R05",
+      "R08",
+      "R11"
+    ]
+  },
+  "must_points": [
+    "法定代表人章用于公司内部颁发的荣誉证书；主体一致(凡岛网络=证书落款『广州凡岛网络科技有限公司』)；资质流向方=『/』无外部流向",
+    "R05(法人资质须平台截图/双章合同)与 R08(补平台名)针对对外流向场景，本案内部自用、无对方无平台→予以豁免",
+    "结论=通过：主体一致、事由自洽、无外部流向、风险极低"
+  ],
+  "forbid_points": [
+    "因 R05 缺平台截图/双章合同而判需补充(内部自用场景应豁免，不硬套对外证据要求)",
+    "要求补平台名(流向=『/』无平台)"
+  ],
+  "_note": "2026-07-08 落成。I01=内部荣誉证书用章、无外部流向→直接通过。checker 仍机械触发 R05/R08(法人资质+无平台名)，但结论层豁免——rules_fired 锁 checker 实际基线，豁免逻辑在 agent 结论层。forbid_points 防止把对外证据要求硬套到纯内部用章。runner 不自动断言结论。"
+}

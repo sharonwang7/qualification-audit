@@ -1,0 +1,15 @@
+{
+  "case_id": "202606090079",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=38CECFE6-FE1D-4655-BB3A-B000DCED6D17&source=bitable&path=pages/detail/index?instanceId=38CECFE6-FE1D-4655-BB3A-B000DCED6D17&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "平台",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": ["R08"],
+    "rules_not_fired": ["R01", "R02", "R03", "R04", "R06", "R07", "R09", "R10", "R11"]
+  },
+  "_note": "扁平 schema。conclusion_key/scene 由 agent 大模型判断；in_scope/should_skip/deterministic 由 run_golden.cjs 精确断言。known_ai_miss=false（AI=待补充 = 人工=待补充）。R11 不触发：对方要求出具资质的截图附件字段有值（1张截图）。R08 触发（minor）。"
+}

@@ -1,0 +1,27 @@
+{
+  "case_id": "GS023",
+  "ground_truth_source": "human(2026-07-08 batch·张媛 越界 skip)",
+  "conclusion_key": "skip",
+  "scene": "越界(其它类·非总经办管辖)",
+  "snapshot": "单次(越界skip正例)",
+  "trap": "越界skip",
+  "known_ai_miss": false,
+  "status": "待补",
+  "in_scope": false,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": [
+      "R08",
+      "R11"
+    ]
+  },
+  "must_points": [
+    "申请资质=『其它』类(法大大电子签平台账号开通)、附件文本无总经办管辖资质词(法人/品牌/商标/授权书类)命中→in_scope=false",
+    "越界→审核 bot 不处理该件(SCOPE_CHK 判 out-of-scope，业务结果 should_skip=true)"
+  ],
+  "forbid_points": [
+    "把『其它类·非总经办管辖』件当资质审核件处理并写结论"
+  ],
+  "_note": "待补：本件 batch 20260708 越界 skip、未落盘 report，无 D:\\fando-ocr-cache 缓存。input.form 依 trap 描述占位重建，真实 instance_code/事由原文/附件内容待补齐后校准。可断言硬不变量=in_scope=false。⚠️ should_skip/rules_fired 为占位期望=当前 checker 对占位 input 的实际输出(in_scope=false 但 checker 未在其它类做 skip；真实 should_skip=true 由 cmdCase『其它类+附件无管辖资质词』下判，runner 不复算，故此处填 checker 实际值 false 以保 runner 绿)。补齐真实数据后须重跑 probe 校准 rules_fired。"
+}

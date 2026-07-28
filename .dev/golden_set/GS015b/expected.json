@@ -1,0 +1,27 @@
+{
+  "case_id": "GS015b",
+  "ground_truth_source": "human(2026-07-04 revisions)",
+  "conclusion_key": "通过",
+  "scene": "政府机构账号操作(P)",
+  "snapshot": "补证后(申请人已在AI评论replies里回复历史原因)",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": [
+      "R05",
+      "R08",
+      "R11"
+    ]
+  },
+  "must_points": [
+    "必须遍历评论含嵌套 replies(申请人历史原因挂在 AI 评论的回复里)",
+    "历史原因已答清(研究院合规中心遗失账号密码→无法找回→重注册)→Q1成立→通过",
+    "仍不得要求内部主体澄清"
+  ],
+  "forbid_points": [
+    "漏读 replies 而误判需补充"
+  ],
+  "_note": "2026-07-04 落成。rules_fired=当前 checker 在本 input 上的实际触发(锁基线，改规则若变→runner 红)。conclusion_key/must/forbid 为结论层，由 agent 按 SKILL 审一遍对照，runner 不自动断言。"
+}

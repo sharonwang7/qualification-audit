@@ -1,0 +1,14 @@
+{
+  "case_id": "ABUSE-0003",
+  "ground_truth_source": "invariant",
+  "conclusion_key": "request_info",
+  "scene": "合作",
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": ["OCR-GATE", "R02", "R03", "R08", "R11"],
+    "rules_not_fired": ["R01", "R04", "R05", "R06", "R07", "R09", "R10"]
+  },
+  "_note": "F2 不变量守护：内部主体 + 商标授权书 虽应 fast-track，但附件全读不出 → OCR 闸触发、needs_human=true、禁止 auto_approve。验证前置闸(needs_human || !ocr_gate.all_ok)一票否决生效。"
+}

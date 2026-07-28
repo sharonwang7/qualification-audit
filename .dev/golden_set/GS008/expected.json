@@ -1,0 +1,15 @@
+{
+  "case_id": "202605140158",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=597AB804-1D87-4E12-94DF-D0175B4FDB9F&source=bitable&path=pages/detail/index?instanceId=597AB804-1D87-4E12-94DF-D0175B4FDB9F&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "新项目",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": [],
+    "rules_not_fired": ["R01", "R02", "R03", "R04", "R05", "R06", "R07", "R08", "R09", "R10", "R11"]
+  },
+  "_note": "扁平 schema。旧版表单格式（拟用资质/相对方全称/使用平台）。scope-filter 修复后 in_scope=true（拟用资质='法定代表人签名（总经办）'命中管辖范围）。R11 修复后不触发（旧字段名别名已覆盖）。R08 不触发（使用平台='AI外呼项目'有值）。法定代表人签名无类型专属规则命中。人工结论=边缘/复杂情况→映射 request_info（需内部决策文档+法人签名原因说明）。known_ai_miss=false（AI结论=暂无）。"
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "202603240129",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=8907ABAA-5D43-4971-9D10-4821C283B6BE&source=bitable&path=pages/detail/index?instanceId=8907ABAA-5D43-4971-9D10-4821C283B6BE&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "request_info",
+  "scene": "合作",
+  "known_ai_miss": true,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": [
+      "R02",
+      "R03",
+      "R12"
+    ],
+    "rules_not_fired": [
+      "R01",
+      "R04",
+      "R05",
+      "R06",
+      "R07",
+      "R08",
+      "R09",
+      "R10",
+      "R11"
+    ]
+  },
+  "_note": "扁平 schema。旧版表单格式。scope-filter 修复后 in_scope=true（拟用资质='商标授权书（总经办）'命中）。R11 修复后不触发（旧字段名别名已覆盖）。R02 触发（附件为GBK乱码docx，无法识别合同/盖章关键词）。R03 触发（附件乱码无法识别授权期限/有效期关键词，合同明细为空）。R07 不触发（乱码无转授权关键词）。R09 不触发（旧表单相对方字段名不匹配→counterparty为空，待后续修 R09 读旧字段）。known_ai_miss=true（AI结论=应通过 ≠ 人工=待补充）。"
+}

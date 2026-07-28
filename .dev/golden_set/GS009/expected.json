@@ -1,0 +1,29 @@
+{
+  "case_id": "202605210111",
+  "source_link": "https://applink.feishu.cn/client/mini_program/open?appId=cli_9cb844403dbb9108&mode=appCenter&path_pc=pc/pages/in-process/index?instanceId=BA1B0BE9-0DE8-4ACD-8E2B-C3786C9EE2BE&source=bitable&path=pages/detail/index?instanceId=BA1B0BE9-0DE8-4ACD-8E2B-C3786C9EE2BE&source=bitable",
+  "ground_truth_source": "human",
+  "conclusion_key": "pass",
+  "scene": "诉讼",
+  "known_ai_miss": true,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": [
+      "R10",
+      "R12"
+    ],
+    "rules_not_fired": [
+      "R01",
+      "R02",
+      "R03",
+      "R04",
+      "R05",
+      "R06",
+      "R07",
+      "R08",
+      "R09",
+      "R11"
+    ]
+  },
+  "_note": "扁平 schema。旧版表单格式。scope-filter 修复后 in_scope=true（拟用资质='商标注册证（总经办）'命中）。R11 修复后不触发（旧字段名别名已覆盖）。R01 不触发（提供商标注册号=49990716已填）。R10 触发（商标注册证一式一份 CONFIRM 提醒，始终激活）。R08 不触发（使用平台='上海市杨浦区法院'有值）。商标注册证诉讼场景：人工认为合理（起诉侵权达人未授权挂载佣金链接），AI 初版结论=应退回→ known_ai_miss=true。"
+}

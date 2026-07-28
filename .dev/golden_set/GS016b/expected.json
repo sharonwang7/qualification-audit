@@ -1,0 +1,30 @@
+{
+  "case_id": "GS016b",
+  "ground_truth_source": "human(2026-07-04 revisions)",
+  "conclusion_key": "通过",
+  "scene": "证券资管开户(B类)",
+  "snapshot": "补证后(评论已补QDII说明+6份开户KYC表单)",
+  "known_ai_miss": false,
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "auto_approve": false,
+    "rules_fired": [
+      "R05",
+      "R08",
+      "R11"
+    ]
+  },
+  "must_points": [
+    "产品风险等级 R5 ≠ 审核阻断，不越权质疑这笔投资本身该不该做(审核边界)",
+    "『法人已决策』属需被证明的事实(决策截图/文件)，非业务口头即成立；本案法人已明确且属实",
+    "遍历评论及其6份开户KYC附件(坐实真实开户)",
+    "附提醒：本次需法人签名但未在申请资质中勾选，提醒申请人下次完整勾选所有涉及资质"
+  ],
+  "forbid_points": [
+    "把 R5 当审核阻断/越权质疑投资",
+    "漏看6份评论附件",
+    "因评论is_delete就不分析其内容"
+  ],
+  "_note": "2026-07-04 落成。rules_fired=当前 checker 在本 input 上的实际触发(锁基线，改规则若变→runner 红)。conclusion_key/must/forbid 为结论层，由 agent 按 SKILL 审一遍对照，runner 不自动断言。"
+}

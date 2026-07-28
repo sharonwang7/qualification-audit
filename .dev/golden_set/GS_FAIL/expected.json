@@ -1,0 +1,13 @@
+{
+  "case_id": "TEST-OCRGATE",
+  "ground_truth_source": "invariant",
+  "conclusion_key": "request_info",
+  "scene": "仲裁",
+  "in_scope": true,
+  "should_skip": false,
+  "deterministic": {
+    "rules_fired": ["OCR-GATE", "R05", "R11"],
+    "rules_not_fired": ["R01", "R02", "R03", "R07", "R09"]
+  },
+  "_note": "不变量守护:附件读不出(status=failed) → 必须出现 OCR-GATE(CRITICAL) → passed=false。若 OCR-GATE 从 rules_fired 消失,说明堵静默漏报的闸门被改坏,本用例立刻挂。R05 触发 SUPPLEMENT（F17 修复后复活：法人资质[法定代表人身份证]+读不出附件无可辨证据→提醒）。"
+}
