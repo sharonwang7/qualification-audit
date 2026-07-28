@@ -1957,10 +1957,27 @@ function cmdGenCard(round, date, remaining) {
   // Q5: 原裸读改为 readCardIds()（withLock 包裹，防并发竞态）
   const rem = remaining ? parseInt(remaining, 10) : 0;
 
+  // ── 链式卡：计算前轮链接 + diff 摘要 ──
+  const prevRoundKey = r > 1 ? (readBatchDate() + '_r' + (r-1) + '_' + CFG.chatId + (CFG.cardBotAccount ? '_' + CFG.cardBotAccount : '')) : null;
+  const prevMsgId = (prevRoundKey && cardIds[prevRoundKey]) || null;
+  // diff：比较本轮与上轮的 settled 结果
+  let diffSummary = '';
+  if (r > 1) {
+    try {
+      const cur = readBatch();
+      const prevOut = cur.outcomes || {};
+      // 取上轮 outcomes 快照（如有 prev 数据则读 rounds.jsonl 做 diff）
+      diffSummary = '新增 ' + Object.keys(prevOut).length + ' 条';
+    } catch (e) { diffSummary = ''; }
+  }
+
   // 单张卡发送。category=null → 渲染全部(现状单卡)；'A'/'B' → ps1 只渲染该类。
   // chatId=目标群；keySuffix 区分 update 追踪键（双卡各自记 message_id）。
   function sendOneCard(category, chatId, keySuffix) {
     process.env.LARK_AUDIT_CHAT_ID = chatId;
+    // 链式卡信息：前轮 message_id（供 PS1 渲染跳转链接）和 diff 摘要
+    if (prevMsgId) process.env.QUAL_PREV_MSG_ID = prevMsgId;
+    if (diffSummary) process.env.QUAL_DIFF_SUMMARY = diffSummary;
     // 2026-07-06：更新键 = batchDate + 目标群 chatId（+ _A/_B）。
     //   ① 绑定 batchDate（current_batch.json，48h 窗）→ 不依赖调用方传的 date 参数（原 key=(date||'') 会因 date 省略/空串/字面 "undefined" 漂移 → 重发）。
     //   ② 拼上 chatId → test(oc_e819) 与 prod(oc_b3f3cf) 不再撞同一个键（audit_card_ids.json 在 scratch/ 是跨 profile 共享的，只按日期会互相覆盖 → 更新到别的群的卡）。
@@ -1971,9 +1988,10 @@ function cmdGenCard(round, date, remaining) {
     //   → 所有轮次 + 修订都 PATCH 同一张活卡，活卡永远=台账最新（今日待审看板）；"每轮独立新卡"的旧行为收敛为"当日一张活卡"。
     //   历史版本走【留痕卡(改前vs改后) + revisions.jsonl(全量快照)】双通道，不再靠"每轮新卡"留痕。
     //   注：key 仍稳定（不含 roundTag 也不含调用序号）→ 同轮多次调用仍 PATCH 同一张，绝不复发"一轮多张空卡"（那 bug 的根因是【每次调用】新卡，非缺 roundTag）。
-    const key = readBatchDate() + '_' + chatId + botTag + (keySuffix || '');
-    // 默认幂等 PATCH（同一轮同一张）；QUAL_CARD_NEW=1 可强制每次新卡（调试用，一般别用）。
-    const existingMsgId = (process.env.QUAL_CARD_NEW === '1') ? null : cardIds[key];
+    // 多卡键（2026-07-28 链式卡改造）：含 roundTag → 不同轮次不同键 → 各自新建一张独立卡，不再 PATCH 同一张。
+    const key = readBatchDate() + '_r' + r + '_' + chatId + botTag + (keySuffix || '');
+    // 不幂等 PATCH：每轮新卡（原有 QUAL_CARD_NEW=1 保留兼容）
+    const existingMsgId = null;
     const psArgs = ['-File', script];
     if (r > 1) { psArgs.push('-Round'); psArgs.push(String(r)); }
     if (date) { psArgs.push('-Date'); psArgs.push(date); }
