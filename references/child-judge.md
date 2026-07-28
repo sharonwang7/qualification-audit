@@ -2,6 +2,22 @@
 
 > 这是【子代理专读】的紧凑判断规格。你（子代理）只审【1 条】资质申请。**不要读整份 SKILL.md**（那是父 agent 的编排规格，你用不到、读它会耗光你的 10min 预算）。本文件够你判 95% 的情形；只有下面明确标"深读"处才去读大文件。
 
+## 🔒 棘轮阶段锁（Ratchet-locked Phases）
+
+子代理审核分三个不可逆阶段。每阶段完成后，落盘结果视同「棘轮齿槽锁死」——后续阶段不得修改前阶段的输出。
+
+| 阶段 | 触发器 | 落盘 | 锁定范围 |
+|------|--------|------|---------|
+| **Phase 1 [LOCKED]** | `case` 返回 | `case_file` / `fando-ocr-cache` | 场景类型、红线结果、附件状态（不可再辩"没看清"） |
+| **Phase 2 [LOCKED]** | `write-result` 返回 ok:true | `result_<code>.json` | verdict、fullAnalysis、applicantAction（不可再改判） |
+| **Phase 3** | `fair` 执行 | `pending_actions CLOSED` | 仅 FAIR 执行；操作失败 ≠ 改判，只能重跑 fair 或 R 修订 |
+
+- Phase 1 锁定后：子代理**不得**在后续步骤中要求重新 `case` 或重新下载附件——"我忘了看"是时间管理问题，不是重跑理由。
+- Phase 2 锁定后：子代理**不得**自行修改已落盘的 result.json。如果撤回→必须走 `R#N 修订`（生成新记录，旧记录留在 `revisions.jsonl` 永久可查）。
+- Phase 2→3 的间隙：必须 gen-card 发卡→用户看到→用户确认 F/A/I/R——这个间隙由 `card_was_generated` 守卫保障。子代理**不得**跳过 gen-card 直接上 fair。父 agent 在 write-result 后必须 gen-card、不得在卡片未生成时执行 fair。
+
+---
+
 ## 🔴 最高铁律：落盘是【强制终点】，不是可选
 子代理最容易犯的错：做完分析、说了一句结论就以为完事了——**错。分析了但没 write-result 落盘 = 这条等于没做**。所以：
 - **先把时间留给"分析完 → 立刻写文件 → 立刻 write-result 到 ok:true"这三步**，宁可分析粗一点，也必须先落盘成功再回话。
@@ -9,11 +25,12 @@
 - `verdict` 只能是纯中文 `通过/需补充/退回/转人工`（工具会自动剥 emoji/空白兜底，但你别主动加 emoji）。
 - 回话【必须带落盘状态】：`[write-result:ok] Case <申请人>: ✅通过/⚠️需补充/❌退回/🔴转人工（资质类型，一句话理由）`。跳过件回 `[skip] ...`。没落盘成功就【别回 Case 行】，直接告诉父 agent 你卡在哪。
 
-## 执行顺序
-1. 跑 `node scripts/audit-tool.cjs case <instance_code>` 取数据 → `{in_scope, fast_track?, should_skip, form, attachments_summary, ocr_gate, deterministic, case_file}`。
-2. `in_scope=false` / `should_skip=true` → 先跑 `node scripts/audit-tool.cjs batch-skip <instance_code>` 登记，再回 `[skip] ...`。**绝不 write-result 产出审核结果**（越界/无管辖资质件归此；无从三阶段就 skip，绝不填占位符空壳，工具层也会硬拒）。
+## 执行顺序（Phase-locked）
+1. 跑 `node scripts/audit-tool.cjs case <instance_code>` 取数据 → **Phase 1 LOCKED**（场景、红线、附件定型）
+2. `in_scope=false`/`should_skip=true` → 先跑 `node scripts/audit-tool.cjs batch-skip <instance_code>` 登记，再回 `[skip] ...`。**绝不 write-result 产出审核结果**（越界/无管辖资质件归此；无从三阶段就 skip，绝不填占位符空壳，工具层也会硬拒）。
 3. `fast_track.flag=true` → 已预填通过，回 `[write-result:ok] done(通过)`。
-4. 否则做三阶段判断（下方），构造 result → 落盘（见最高铁律）→ 回话。
+4. 否则做完整三阶段判断（下方），构造 result → 落盘（见最高铁律）→ 回话 → **Phase 2 LOCKED**（verdict + fullAnalysis 不可再改判）
+5. 父 agent gen-card → 用户看到卡 → 用户 F/A/I/R → **Phase 3**
 
 ## ⚡ 确定性快速检查（T1类，先跑这5条再走三阶段）
 
