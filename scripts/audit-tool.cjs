@@ -35,7 +35,7 @@ const path = require('path');
     if (key && !(key in process.env)) process.env[key] = val;
   }
 })();
-const { execFileSync, spawn } = require('child_process');
+const { execFileSync, execSync, spawn } = require('child_process');
 
 const { parseForm, downloadAttachments, downloadCommentAttachments, readAttachmentContent, findCloudDocLinks } = require('../lib/data-prep.js');
 const { runDeterministicChecks, loadEntities } = require('../lib/deterministic-checker.js');
@@ -47,6 +47,21 @@ const { hasAIComment, writeComment, extractCommentAttachments } = require('../li
 const { withLock, atomicWriteFileSync } = require('../lib/file-lock.js');
 // L1 飞书接入连接器（P0 收拢）：本文件所有 lark-cli 传输统一委托到此模块
 const connector = require('../lib/connector-feishu.js');
+
+// ── 棘轮版本检查（v2.2.2）──
+// 每次命令执行前记录 git 版本、最新 tag 和脏状态，方便生产审计和回滚
+function checkSkillVersion() {
+  try {
+    const tag = execSync('git describe --tags --abbrev=0', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).trim();
+    const latest = execSync('git tag --sort=-creatordate', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).split('\n')[0].trim();
+    const dirty = execSync('git status --porcelain', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).trim();
+    const hash = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', timeout: 3000 }).trim();
+    const status = dirty ? '\u26a0\ufe0f DIRTY' : (tag !== latest ? `\u26a0\ufe0f BEHIND(latest=${latest})` : 'clean');
+    return { tag, hash, latest, dirty: !!dirty, status };
+  } catch (e) {
+    return { tag: 'unknown', hash: 'unknown', status: 'no-git' };
+  }
+}
 
 // ── Profile 隔离层（C1, 2026-07-02）：一个开关锁定整组环境，杜绝"改了群忘了改状态"的半吊子隔离 ──
 // prod = 大公子桥真实生产（值取自 .env）；test = OpenClaw 测试（硬编码 _test 路径 + 测试群 + 禁 approve）。
@@ -110,7 +125,8 @@ let QUAL_DELEGATES = {};
 try { if (process.env.QUAL_DELEGATES) QUAL_DELEGATES = JSON.parse(process.env.QUAL_DELEGATES); }
 catch (e) { console.error('[qual-audit] QUAL_DELEGATES 解析失败，忽略：' + e.message); }
 // 启动自检：当前 profile 打到 stderr（不污染 stdout 的 JSON 输出），便于确认没跑错环境。
-console.error(`[qual-audit] PROFILE=${QUAL_PROFILE} chat=${CFG.chatId} auditDir=${CFG.auditDir} allowApprove=${CFG.allowApprove}`);
+const _ver = checkSkillVersion();
+console.error(`[qual-audit] PROFILE=${QUAL_PROFILE} v${_ver.tag} @ ${_ver.hash} [${_ver.status}] chat=${CFG.chatId} auditDir=${CFG.auditDir} allowApprove=${CFG.allowApprove}`);
 
 const APP_ID = process.env.FEISHU_APP_ID || 'cli_9cb844403dbb9108';
 const DEFINITION_CODE = process.env.QUAL_DEFINITION_CODE || '0E0BBB7F-A4C8-471F-8051-3E4E88A83856';
