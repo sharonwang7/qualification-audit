@@ -1010,6 +1010,55 @@ async function cmdCase(code, opt) {
   try { const _pe = readPendingActions()[code]; if (_pe && _pe.reviseReason) _reviseReason = _pe.reviseReason; } catch (e) {}
   if (_reviseReason) scene_gates.push('🔴 用户 R 修订（复审）：' + _reviseReason + ' —— 必须【针对用户这条修订意见】重新判断（用户不认可上轮结论或指出自相矛盾），正面回应其质疑，不得照抄上轮分析。');
 
+  // ── scoped_rules（规则按需注入，v2.2.7）──
+  // 从场景索引匹配 sealType/流向方/事由 → 确定适用场景 → 只返回该场景的规则子集
+  // 减少子代理上下文负载，消除"套错场景规则"（如银行场景套了合作场景的合同要求）
+  let scoped_rules = null;
+  try {
+    const idxPath = path.join(__dirname, '..', 'references', 'scenes', 'index.json');
+    if (fs.existsSync(idxPath)) {
+      const idx = JSON.parse(fs.readFileSync(idxPath, 'utf8'));
+      const matchedScenes = new Set();
+      // 从 sealType 匹配
+      const sealType = String(form['申请资质'] || '');
+      for (const [keyword, scenes] of Object.entries(idx._sealType_map || {})) {
+        if (sealType.includes(keyword)) scenes.forEach(s => matchedScenes.add(s));
+      }
+      // 从流向方匹配
+      const dest = String(form['资质流向方全称（公司/自然人/平台）'] || '');
+      for (const [keyword, scenes] of Object.entries(idx._destKeyword_map || {})) {
+        if (dest.includes(keyword)) scenes.forEach(s => matchedScenes.add(s));
+      }
+      // 从事由匹配（只扫申请事由字段，不扫整个表单JSON避免误匹配）
+      const reason = String(form['申请事由'] || '');
+      for (const [keyword, scenes] of Object.entries(idx._reasonKeyword_map || {})) {
+        if (reason.includes(keyword)) scenes.forEach(s => matchedScenes.add(s));
+      }
+      // 构建 scoped_rules
+      const sceneFiles = idx.scene_files || {};
+      const activeScenes = [...matchedScenes].filter(s => sceneFiles[s]).map(s => sceneFiles[s].label);
+      const activeRules = [...matchedScenes].flatMap(s => sceneFiles[s]?.principal_rules || []);
+      const excludedSets = [...matchedScenes].flatMap(s => {
+        try {
+          const sf = path.join(__dirname, '..', sceneFiles[s]?.file || '');
+          if (fs.existsSync(sf)) return JSON.parse(fs.readFileSync(sf, 'utf8')).excluded_rules || [];
+        } catch (e) {}
+        return [];
+      });
+      scoped_rules = {
+        matched_scenes: [...matchedScenes],
+        active_scene_labels: activeScenes,
+        active_rules: [...new Set(activeRules)],
+        excluded_rules: [...new Set(excludedSets)],
+        note: matchedScenes.size === 0
+          ? '未匹配到已知场景，子代理应参考 child-judge.md 全量判据自行判断'
+          : `命中场景：${activeScenes.join('、')}。优先用 active_rules，excluded_rules 不适用`
+      };
+    }
+  } catch (e) {
+    console.error('[qual-audit] scoped_rules 生成失败（非致命）: ' + e.message);
+  }
+
   // stdout 只回精简摘要：form 内联(文本有界)；附件只回摘要+预览+状态，不回全文(防溢出)
   return {
     instance_code: code,
@@ -1035,6 +1084,7 @@ async function cmdCase(code, opt) {
     comments_summary: applicantComments.map(r => ({ author: r.author, create_time: r.create_time, text: (r.text || '').slice(0, 500) })),
     deterministic,
     scene_gates,
+    scoped_rules,
     createTime,
     case_file: cf,
     hint: `附件全文未内联。要全文：node scripts/audit-tool.cjs read-attachment ${code} <idx> [maxChars]。comments_summary=申请人评论回复（补料/说明常在此，必须纳入判断，非空时逐条读）。放行门：ocr_gate.all_ok=false 或 deterministic.needs_human 时禁止自动通过，转人工。`
