@@ -76,6 +76,8 @@ function checkSkillVersion() {
   }
 }
 
+const SKILL_ROOT = path.join(__dirname, '..');
+
 // ── Profile 隔离层（C1, 2026-07-02）：一个开关锁定整组环境，杜绝"改了群忘了改状态"的半吊子隔离 ──
 // prod = 大公子桥真实生产（值取自 .env）；test = OpenClaw 测试（硬编码 _test 路径 + 测试群 + 禁 approve）。
 // 安全默认 test（fail-safe）：忘设 QUAL_PROFILE 不会误伤生产；生产入口必须显式 QUAL_PROFILE=prod。
@@ -160,7 +162,6 @@ const USER_OPEN_ID = (() => {
   }
   return CFG.identity;
 })();
-const SKILL_ROOT = path.join(__dirname, '..');
 const ATTACH_DIR = process.env.QUAL_ATTACH_DIR || path.join(SKILL_ROOT, '..', 'fando-ocr-cache');
 const CWD = process.cwd();
 const PREVIEW_CHARS = 240;
