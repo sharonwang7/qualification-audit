@@ -1,0 +1,1 @@
+{"scene":"out_of_scope","label":"越界/无管辖","principal_rules":["S01","S02"],"triggers":["公章","其它","无管辖"],"excluded_rules":["ALL"],"notes":"越界件——不在我方管辖范围。子代理必须回 batch-skip，不得 write-result 产出审核结果","key_questions":{"S01":"is in_scope? 申请的资质是否在我方管辖列表(MY_AUDIT_QUALS)内？","S02":"若为「其它」类——事由/附件中是否有暗示该资质属于我方管辖范围的线索？"}}

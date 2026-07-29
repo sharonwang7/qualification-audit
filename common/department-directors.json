@@ -1,0 +1,140 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "last_updated": "2026-06-23",
+    "source": "飞书Bitable CrhPbSGIVaB7e4sgGUQcQPiynsh",
+    "note": "资质审核中需要核对部门负责人时使用此文件"
+  },
+  "departments": [
+    {
+      "name": "财务部",
+      "heads": [
+        {
+          "name": "王带娣",
+          "open_id": "ou_18268971e8355b660980cfefaf462569"
+        },
+        {
+          "name": "李方方",
+          "open_id": "ou_722688ba7cbd1e1fced968e054569408"
+        }
+      ],
+      "hr_managers": [
+        {
+          "name": "邹梦婉",
+          "open_id": "ou_e55e7cc4a5500af5c99673284f13f1ef"
+        },
+        {
+          "name": "李宁",
+          "open_id": "ou_dfb86032163f634c542bd150509c1905"
+        }
+      ],
+      "exec_assistants": [],
+      "cadre_managers": [
+        {
+          "name": "倪晓虹",
+          "open_id": "ou_4837321f4e1f2727507e61a57128fad0"
+        },
+        {
+          "name": "张彤",
+          "open_id": "ou_76ca35064a961cf3ac5bd580c41cb886"
+        }
+      ],
+      "strategy_group": [
+        {
+          "name": "高璐",
+          "open_id": "ou_507e0039f16e089b966181df8bf73901"
+        }
+      ],
+      "status": "使用中"
+    },
+    {
+      "name": "产品供应部",
+      "heads": [
+        {
+          "name": "赵婷婷",
+          "open_id": "ou_bd8be8d4f8ee51c0bb899f36b97a8133"
+        }
+      ],
+      "hr_managers": [
+        {
+          "name": "钱含韵",
+          "open_id": "ou_74fe7314b496de28fe379f90883c99b3"
+        },
+        {
+          "name": "邹梦婉",
+          "open_id": "ou_e55e7cc4a5500af5c99673284f13f1ef"
+        },
+        {
+          "name": "张玉",
+          "open_id": "ou_1438c8fab02f8ee53daa5578e8af6bbb"
+        }
+      ],
+      "exec_assistants": [
+        {
+          "name": "杨金连",
+          "open_id": "ou_2467df103277e52cbcd8d7eec1b40c0e"
+        }
+      ],
+      "cadre_managers": [
+        {
+          "name": "倪晓虹",
+          "open_id": "ou_4837321f4e1f2727507e61a57128fad0"
+        },
+        {
+          "name": "杨钰婷",
+          "open_id": "ou_ecfc80c7038df671b68075d1722066fd"
+        }
+      ],
+      "strategy_group": [
+        {
+          "name": "高璐",
+          "open_id": "ou_507e0039f16e089b966181df8bf73901"
+        }
+      ],
+      "status": "使用中"
+    },
+    {
+      "name": "新品牌事业部",
+      "heads": [
+        {
+          "name": "曾起记",
+          "open_id": "ou_020f0fb3b8923514014983b673499f1e"
+        }
+      ],
+      "hr_managers": [
+        {
+          "name": "霍雨佳",
+          "open_id": "ou_bf5a3514b4db3b2d87dbab050d7366f9"
+        },
+        {
+          "name": "邹梦婉",
+          "open_id": "ou_e55e7cc4a5500af5c99673284f13f1ef"
+        }
+      ],
+      "exec_assistants": [
+        {
+          "name": "马菲阳",
+          "open_id": "ou_3ac9efa88623a876a218e7dc24da4f26"
+        }
+      ],
+      "cadre_managers": [
+        {
+          "name": "倪晓虹",
+          "open_id": "ou_4837321f4e1f2727507e61a57128fad0"
+        },
+        {
+          "name": "张彤",
+          "open_id": "ou_76ca35064a961cf3ac5bd580c41cb886"
+        }
+      ],
+      "strategy_group": [
+        {
+          "name": "丁小恬",
+          "open_id": "ou_888205a9bd0f28840b25893166b74a7f"
+        }
+      ],
+      "status": "使用中"
+    }
+  ],
+  "usage_note": "审批申请中的品牌/产品线可通过品牌→部门映射关系定位到对应部门，然后在此文件查找部门负责人及其HR/经助/干部管理团队"
+}

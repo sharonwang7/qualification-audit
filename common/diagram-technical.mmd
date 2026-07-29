@@ -1,0 +1,259 @@
+flowchart TD
+
+%% ══════════════════════════════════════════════════════════
+%% [INFRA] L1 飞书连接器（P0 2026-07-06）· 图例（独立不入流）
+%% 节点: CONNECTOR_NOTE
+%% 改这里: 改任何 lark-cli 飞书调用只碰 lib/connector-feishu.js
+%% ══════════════════════════════════════════════════════════
+subgraph INFRA_LAYER["🔌 L1 飞书连接器（P0 2026-07-06 收拢）"]
+    CONNECTOR_NOTE["lib/connector-feishu.js —— 唯一 lark-cli 飞书传输<br>方法: cliShortcut / api / apiWithBody / approvalAction / fetchDoc<br>收拢自 audit-tool.cjs(lark/larkApi/larkApprovalAction/docs+fetch)<br>+ comment-manager.js(execLarkApi)，行为逐字节等价<br>覆盖: PAGINATE·GET_INST·FLIP_ALL(读评论)·F/A/I_EXEC(写评论+审批)<br>⚠️ 例外: SEND_CARD 发卡走 feishu-common.ps1 REST 独立路径，不经此层"]
+end
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-0] ENV · Profile 初始化
+%% 节点: START, LOAD_ENV, PROFILE_SEL, CFG_PROD, CFG_TEST, STDERR_LOG
+%% 改这里: 新增/修改 ENV 参数、Profile 配置值
+%% ══════════════════════════════════════════════════════════
+START([🕐 cron 唤醒 父Agent<br>sessionTarget=isolated<br>payload.kind=agentTurn]) --> LOAD_ENV
+
+subgraph ENV_INIT["🔧 启动初始化"]
+    LOAD_ENV["加载 skill-root/.env<br>系统环境变量优先，不覆盖已有值<br>FEISHU_APP_ID / QUAL_DEFINITION_CODE<br>QUAL_ATTACH_DIR / QUAL_SOFFICE_BIN<br>QUAL_CARD_SCRIPT / QUAL_SYNC_SCRIPT 等"]
+    LOAD_ENV --> PROFILE_SEL{QUAL_PROFILE?<br>默认 test}
+    PROFILE_SEL -- prod --> CFG_PROD["prod 配置<br>chatId: oc_231f<br>identity: ou_102cae（大公子桥）<br>auditDir: agent-hub/audit_reports<br>pending: pending_actions.json<br>allowApprove: true"]
+    PROFILE_SEL -- test --> CFG_TEST["test 配置<br>chatId: oc_e819<br>identity: ou_dc58e9（OpenClaw）<br>auditDir: _test/audit_reports<br>pending: pending_actions.test.json<br>allowApprove: false"]
+    CFG_PROD & CFG_TEST --> STDERR_LOG["stderr 自检日志<br>[qual-audit] PROFILE=... chat=... auditDir=... allowApprove=...<br>动手前先看此行确认环境"]
+end
+
+STDERR_LOG --> CMD_LIST
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-1] list · 翻页拉全量 + 状态过滤 + 建工作清单
+%% 节点: CMD_LIST, PAGINATE, READ_PA, CLEAN_30, RECONCILE, AUTO_CLOSE,
+%%        DATE_WIN, APPLY_WIN, FLIP_ALL, BUILD_WL, PA_CHECK,
+%%        ADD_NEW, SKIP_PR, SKIP_CL, SKIP_AW, ADD_ONG,
+%%        SORT_WL, TRUNC, LIST_RET
+%% 改这里: 翻页逻辑、日期窗口参数、状态机分流、worklist 排序/截断
+%% ══════════════════════════════════════════════════════════
+subgraph LIST_FLOW["📋 步骤1：list · 建工作清单"]
+    CMD_LIST["node scripts/audit-tool.cjs list N<br>父Agent 调用<br>写 current_batch.json（batchDate=今日）<br>子代理跨午夜时对齐同一批次日期"]
+    CMD_LIST --> PAGINATE["翻页拉全量待办<br>approval tasks query 🔌connector<br>page_size=100 最多20页<br>task_id 倒序排<br>totalPending = 全量条数"]
+    PAGINATE --> READ_PA["读 pending_actions.json<br>若文件不存在/损坏<br>→ computeNextNFromReports<br>扫最近30天 max_n+1"]
+    READ_PA --> CLEAN_30["清理 30天前 CLOSED 条目<br>withLock 原子删"]
+    CLEAN_30 --> RECONCILE{对账自愈<br>totalPending>0?}
+    RECONCILE -- 是 --> AUTO_CLOSE["pa中 open态 但不在飞书待办集<br>→ 自动置 CLOSED + reconciledAt<br>防 FAIR 执行漏记账漂移"]
+    RECONCILE -- 否 --> DATE_WIN
+    AUTO_CLOSE --> DATE_WIN
+
+    DATE_WIN{sinceDays>0?<br>QUAL_SINCE_DAYS<br>默认7天}
+    DATE_WIN -- 是 --> APPLY_WIN["applyDateWindow:<br>对 tasks 从新到旧<br>instances get 读 start_time<br>start_time>=cutoff 保留<br>连续5条越界停<br>SCAN_CAP=300防全扫<br>读不到时间保守保留<br>collectOnly节点丢弃不断streak"]
+    DATE_WIN -- 否全量 --> FLIP_ALL
+    APPLY_WIN --> FLIP_ALL
+
+    FLIP_ALL["① 预翻转全量 pa AWAITING_APPLICANT:<br>hasNewUserComment(code, iCommentTime)? 🔌connector<br>→ 批量 state=APPLICANT_REPLIED<br>withLock 原子写 pa<br>→ flipped_count"]
+    FLIP_ALL --> BUILD_WL
+
+    BUILD_WL["遍历 candidateTasks<br>按 pa state 分流"]
+    BUILD_WL --> PA_CHECK{pa state}
+    PA_CHECK -- "无条目 new" --> ADD_NEW["加入 worklist<br>pa_state=new"]
+    PA_CHECK -- "PENDING_REVIEW" --> SKIP_PR["跳过<br>计入 pending_review_count"]
+    PA_CHECK -- "CLOSED" --> SKIP_CL["跳过"]
+    PA_CHECK -- "AWAITING_APPLICANT" --> SKIP_AW["跳过<br>（FLIP_ALL 已处理翻转机会）<br>计入 awaiting_count"]
+    PA_CHECK -- "APPLICANT_REPLIED" --> ADD_ONG["加入 worklist<br>pa_state=APPLICANT_REPLIED<br>pa_n=已有 n"]
+
+    ADD_NEW & ADD_ONG --> SORT_WL
+
+    SORT_WL["排序:<br>APPLICANT_REPLIED 0（球回来优先）<br>new 1<br>同档内 task_id 倒序最新在前"]
+    SORT_WL --> TRUNC["截断 N 默认12<br>remaining = worklist - N<br>未返回的下轮自动重现"]
+    TRUNC --> LIST_RET["返回:<br>tasks 含 instance_code task_id pa_state pa_n<br>total_pending remaining since_days window_scanned<br>pending_review_count awaiting_count flipped_count<br>batch_date cases note 摘要"]
+end
+
+LIST_RET --> SPAWN_LOOP
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-2] 父Agent 编排 · 并发 spawn 子代理
+%% 节点: SPAWN_LOOP, SUB_START
+%% 改这里: maxConcurrentRuns 并发上限、子代理入参
+%% ══════════════════════════════════════════════════════════
+subgraph SPAWN_FLOW["👥 父Agent 编排：逐条 sessions_spawn"]
+    SPAWN_LOOP["对每条 instance_code<br>sessions_spawn 子代理<br>maxConcurrentRuns=8 自动管并发<br>子代理超时/失败 → 无 pa 条目 → 下轮重现"]
+    SPAWN_LOOP --> SUB_START["子代理接收:<br>① 技能包根目录 + cd<br>② instance_code + task_id<br>③ 执行 SKILL.md 步骤0/4 完整三阶段"]
+end
+
+SUB_START --> CMD_CASE
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-3] case · 读取数据包（子代理执行）
+%% 节点: CMD_CASE, GET_INST, NODE_GATE, SKIP_NODE, PARSE_FORM,
+%%        SCOPE_CHK, DL_ATT, OTHER_CHK, READ_ATT,
+%%        DET_CHK, FAST_TRACK_Q, FAST_TRACK, WRITE_CF,
+%%        OCR_GATE_CALC, CASE_RET
+%% 改这里: 节点识别正则、表单字段解析、scope 判断、附件读取策略、OCR 逻辑
+%% ══════════════════════════════════════════════════════════
+subgraph CASE_FLOW["📦 步骤2：case · 读取数据包"]
+    CMD_CASE["node scripts/audit-tool.cjs case instance_code"]
+    CMD_CASE --> GET_INST["approval instances get 🔌connector<br>读取审批实例完整数据<br>任务/节点/状态"]
+    GET_INST --> NODE_GATE{"节点 gate: collectOnly?<br>当前 pending 任务<br>全是 是否领取 等下游节点<br>AUDIT_NODE_RE 不匹配"}
+    NODE_GATE -- collectOnly=true --> SKIP_NODE["返回:<br>in_scope=false<br>should_skip=true<br>skip_reason=下游节点"]
+    NODE_GATE -- 否有审核节点 --> PARSE_FORM["parseForm:<br>解析全部字段 兼容字段名变体<br>申请资质 申请事由 品牌 使用平台<br>资质流向方 公司主体 注册号<br>合同明细 是否合作关系<br>截图附件 关联新客户开拓审批"]
+
+    PARSE_FORM --> SCOPE_CHK{"isInScope:<br>申请资质字段在管辖清单?<br>（仅判结构化字段 不扫事由）"}
+    SCOPE_CHK -- true --> DL_ATT
+    SCOPE_CHK -- false --> DL_ATT
+
+    DL_ATT["downloadAttachments 表单附件全字段<br>extractCommentAttachments 评论区附件<br>  ⑦ BOT_IDS 过滤 + 嵌套 reply 遍历<br>downloadCommentAttachments<br>全写盘 QUAL_ATTACH_DIR"]
+    DL_ATT --> READ_ATT["readAttachmentContent 分诊:<br>文本PDF → PyMuPDF<br>DOCX → python-docx<br>XLSX → openpyxl<br>ZIP → 解包逐个分诊<br>图片 → status=needs_vision<br>扫描PDF → 渲染前N页dpi150 → needs_vision<br>.doc → LibreOffice转docx再读<br>非标DOCX读空 → LibreOffice转PDF<br>QUAL_OCR_MODE=paddle → 离线兜底<br>status=empty/failed → 跳过"]
+
+    READ_ATT --> OTHER_CHK{"③ !inScope 且 其它/其他类?<br>事由 OR 附件文本<br>含管辖资质词?"}
+    OTHER_CHK -- "命中 → inScope=true" --> DET_CHK
+    OTHER_CHK -- "否/非其他" --> DET_CHK
+
+    DET_CHK["runDeterministicChecks:<br>红线 R02 R05 R11等<br>autoApprove 内部商标授权判定<br>shouldSkip needs_human<br>场景豁免 L01→R11/R05豁免"]
+    DET_CHK --> FAST_TRACK_Q{"autoApprove.flag=true<br>且 not needs_human?<br>内部商标授权书"}
+    FAST_TRACK_Q -- 是 --> FAST_TRACK["Fast-track 预填:<br>verdict=通过<br>构造 fastTrackResult<br>writeResultObj → PENDING_REVIEW<br>hint: 仍需 gen-card+F#N 确认<br>禁止本轮直接 approve"]
+    FAST_TRACK_Q -- 否 --> WRITE_CF["写盘 case.json<br>ATTACH_DIR/code前8位/case.json<br>全量数据 form+attachments全文+deterministic"]
+    WRITE_CF --> OCR_GATE_CALC["计算 ocr_gate:<br>unreadable = status不等于ok且不等于needs_vision<br>needs_vision 非失败 子代理用 image() 读<br>all_ok = unreadable为空<br>low_conf_advisory 参考不强制升级"]
+    OCR_GATE_CALC --> CASE_RET["stdout 精简摘要 不内联附件全文:<br>in_scope should_skip<br>form 清理版<br>attachments_summary 含<br>  status low_conf min_score<br>  seal_count vision_paths<br>  truncated_pages chars preview<br>ocr_gate deterministic case_file路径"]
+end
+
+FAST_TRACK --> IN_SCOPE_CHECK
+CASE_RET --> IN_SCOPE_CHECK
+SKIP_NODE --> IN_SCOPE_CHECK
+
+IN_SCOPE_CHECK{in_scope=false<br>或 should_skip=true?}
+IN_SCOPE_CHECK -- 是 --> SUB_SKIP["子代理回父Agent: skip<br>不调 write-result"]
+IN_SCOPE_CHECK -- 否 --> STEP0
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-4] 三阶段深度审核（子代理大模型判断）
+%% 节点: STEP0, KB_LOOKUP, VIS_CHK, VIS_READ, READ_ATT_ON,
+%%        OCR_GATE_CHK, PARTIAL, STAGE1, STAGE2, STAGE3, VERDICT
+%% 改这里: 资质分类、场景识别、知识库查询逻辑、OCR 容错策略、三阶段规则
+%% ══════════════════════════════════════════════════════════
+subgraph AUDIT_FLOW["🔍 步骤0/4：三阶段深度审核 大模型判断"]
+    STEP0["步骤0a: 资质分类<br>法人/董事/品牌授权书<br>商标注册证/商标授权书/其他<br><br>步骤0b: 场景识别<br>读 references/scene-principles.md<br>诉讼仲裁 银行证券金融<br>平台举证入驻 合作授权类 新项目<br>可叠加多场景 → 读对应多章节"]
+    STEP0 --> KB_LOOKUP["按需查知识库 不强制每条都读:<br>trademark-registry-full.json 核商标注册号归属<br>overseas-entities.json 确认海外主体<br>department-directors.json 核负责人签批"]
+    KB_LOOKUP --> VIS_CHK{附件含 needs_vision?}
+    VIS_CHK -- 是 --> VIS_READ["用 image() 读取 vision_paths<br>扫描PDF: vision_paths含多张页图<br>识别内容当作附件正文纳入三阶段<br>truncated_pages=true → 结论保守<br>+提示需人工核对原件后页"]
+    VIS_CHK -- 否 --> READ_ATT_ON
+    VIS_READ --> READ_ATT_ON
+    READ_ATT_ON["按需 read-attachment code idx maxChars<br>有界读 默认4000字<br>seal_count 仅作线索<br>双章最终由大模型判 R02"]
+    READ_ATT_ON --> OCR_GATE_CHK{ocr_gate.all_ok=false<br>或 needs_human=true?}
+    OCR_GATE_CHK -- 全部ok --> STAGE1
+    OCR_GATE_CHK -- "部分或全部失败" --> PARTIAL["基于可读信息判四维度:<br>可读信息覆盖 → 结论照给<br>  评论标注失败附件+原因+需人工核查原件<br>某维度不足 → 需补充<br>  标注缺失维度+所有失败附件<br>全部失败且表单不足 → 转人工"]
+    PARTIAL --> STAGE1
+
+    STAGE1["阶段一·证据链核实<br>必须有外部客观证据 被证明不等于被说明<br>无证据 → 标注证据不足 不直接驳回<br>合作/授权类: 过7行证据层级表<br>第7行最低级 → 退回 此阶段即确定"]
+    STAGE1 --> STAGE2["阶段二·逻辑穿透<br>一次性列全缺失项:<br>看流向 看用途<br>业务必要性 Q1触发条件+Q2强制必要性<br>主体必要性<br>无证据绝不脑补 → 标无法从现有信息确认<br>阶段二不满足 → 需补充"]
+    STAGE2 --> STAGE3["阶段三·风险控制<br>替代控制<br>限制控制: 转授权条款/授权范围/授权期限不明确 → 需补充<br>凭证造假 → 退回<br>技术控制: 不超过15字水印建议"]
+    STAGE3 --> VERDICT["agent 输出 verdict:<br>通过 / 需补充 / 退回 / 转人工<br>构造 result.json"]
+end
+
+VERDICT --> CMD_WR
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-5] write-result · 写报告 + 更新 pending_actions
+%% 节点: CMD_WR, WR_G1, WR_R1, WR_G2, WR_R2, WR_G3, WR_R3,
+%%        WR_G4, WR_R4, WR_FILL, WR_LOCK, WR_N_CHK, WR_ATOMIC,
+%%        WR_PA, WR_RET
+%% 改这里: 守卫规则、原子写逻辑、pa 状态更新字段
+%% ══════════════════════════════════════════════════════════
+subgraph WR_FLOW["💾 步骤5a：write-result · 写报告 + 更新 pending_actions"]
+    CMD_WR["node scripts/audit-tool.cjs write-result<br>instance_code result.json"]
+    CMD_WR --> WR_G1{"case.json 存在?<br>必须先跑 case"}
+    WR_G1 -- 否 --> WR_R1["拒绝:<br>未跑 case 禁止凭记忆 write-result<br>幻觉护栏 2026-07-02"]
+    WR_G1 -- 是 --> WR_G2{"result.dest 与 case.json<br>权威流向方有实体重合?"}
+    WR_G2 -- 否 --> WR_R2["拒绝:<br>dest 疑似幻觉<br>请 Read case.json 核对后重填"]
+    WR_G2 -- 是 --> WR_G3{"case.json 的<br>in_scope=false<br>或 should_skip=true?"}
+    WR_G3 -- 是 --> WR_R3["拒绝:<br>越界/应跳过件禁止落盘<br>子代理纪律护栏"]
+    WR_G3 -- 否 --> WR_G4{"⑤ fullAnalysis<br>含「阶段一/阶段二/阶段三」<br>且 ≥100字?<br>verdict=转人工 豁免"}
+    WR_G4 -- 否 --> WR_R4["拒绝（WR_G4）:<br>空壳审核护栏<br>须完整三阶段结构+≥100字<br>完整审核后重新提交"]
+    WR_G4 -- 是 --> WR_FILL["若 result.createTime 缺失<br>从 case.json 补充"]
+    WR_FILL --> WR_LOCK["withLock pending_actions_path<br>持锁重读最新 pending_actions<br>防并发丢写/同n"]
+    WR_LOCK --> WR_N_CHK{"pa code 已存在?<br>R修订覆盖"}
+    WR_N_CHK -- "已有 → 保留原 n" --> WR_ATOMIC
+    WR_N_CHK -- "新 → n=nextN; nextN++" --> WR_ATOMIC
+    WR_ATOMIC["原子写 audit_reports/YYYYMMDD.json<br>日期读 current_batch.json（⑥ 跨午夜对齐）<br>atomicWriteFileSync<br>新增 or 覆盖"]
+    WR_ATOMIC --> WR_PA["更新 pending_actions code:<br>n person date verdict<br>state → PENDING_REVIEW<br>since=now<br>原子写 pa.json"]
+    WR_PA --> WR_RET["返回 ok:true<br>n person verdict file"]
+end
+
+WR_RET --> CTX_COMPRESS
+WR_R1 & WR_R2 & WR_R3 & WR_R4 --> SUB_ERR["子代理 error 返给父Agent"]
+
+CTX_COMPRESS["子代理 Context 压缩:<br>丢弃附件全文+推理过程<br>只保留一行摘要:<br>Case 人: 通过/需补充/退回/转人工（资质，一句话理由）<br>随后子代理销毁"]
+CTX_COMPRESS --> ALL_DONE
+
+SUB_SKIP --> ALL_DONE
+ALL_DONE{"所有子代理回齐?"}
+ALL_DONE -- 否 --> WAIT_SUB["等待中<br>超时/失败→无pa条目→下轮重现"]
+WAIT_SUB --> ALL_DONE
+ALL_DONE -- 是 --> CMD_GEN_CARD
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-6] gen-card · 发卡 + INTERRUPT
+%% 节点: CMD_GEN_CARD, READ_REPORT, SEND_CARD, INTERRUPT
+%% 改这里: 卡片发送方式、目标群、remaining 显示逻辑
+%% ══════════════════════════════════════════════════════════
+subgraph GENCARD_FLOW["📬 步骤5b：gen-card · 发卡 + INTERRUPT"]
+    CMD_GEN_CARD["node scripts/audit-tool.cjs gen-card round '' remaining<br>第3参 = list 返回的 remaining<br>remaining>0 卡片显示另有M条待下轮"]
+    CMD_GEN_CARD --> READ_REPORT["⑥ 多批次合并:<br>从 pending_actions 收集全部<br>PENDING_REVIEW + APPLICANT_REPLIED 的 date 字段<br>+ 今日文件（安全网）<br>读所有 YYYYMMDD.json → instanceCode 去重<br>最近批次优先 → 按 verdict 分组<br>通过 需补充 退回 转人工"]
+    READ_REPORT --> SEND_CARD["feishu-common.ps1 REST 发卡<br>Invoke-FeishuApi 直接 REST<br>目标: CFG.chatId<br>禁用 lark-cli im send-card bot 不支持@file<br>禁用 MCP message_create 超5KB失败"]
+    SEND_CARD --> INTERRUPT["Turn 结束 INTERRUPT<br>当前 Turn 禁止调 approve/reject/note<br>等用户 FAIRS 指令 → 新 Turn 执行"]
+end
+
+INTERRUPT --> USER_REPLY
+
+%% ══════════════════════════════════════════════════════════
+%% [PHASE-7] FAIRS 执行（新 Turn）
+%% 节点: USER_REPLY, REPLY_TYPE, DISCUSS, ASK_N, PROD_CHK1, SET_PROD,
+%%        LOOKUP, VERIFY_P, ASSERT, ACTION_ROUTE,
+%%        F_EXEC, A_EXEC, I_EXEC, R_START, R_EXEC, S_EXEC
+%% 改这里: 指令解析规则、assertActionable 守卫、F/A/I/R/S 执行步骤
+%% ══════════════════════════════════════════════════════════
+subgraph FAIR_FLOW["✅ 步骤5-2：FAIRS 执行 新Turn"]
+    USER_REPLY["用户回复"]
+    USER_REPLY --> REPLY_TYPE{指令类型}
+    REPLY_TYPE -- "纯意见/观点<br>我认为/应该/感觉" --> DISCUSS["仅讨论<br>不执行任何命令"]
+    REPLY_TYPE -- "有意图但无#N" --> ASK_N["询问确认编号<br>不猜测不执行"]
+    REPLY_TYPE -- "F#N 通过#N" --> PROD_CHK1
+    REPLY_TYPE -- "A#N 原因 退回#N" --> PROD_CHK1
+    REPLY_TYPE -- "I#N 要求 留言#N" --> PROD_CHK1
+    REPLY_TYPE -- "R#N 原因 异议#N" --> R_START
+    REPLY_TYPE -- "S#N 越界踢出" --> S_EXEC["scope-dismiss N<br>pa.state=CLOSED + dismissedAt<br>dismissNote=越界内部关闭<br>申请人无感知 飞书无评论写入<br>下轮 list 自动跳过"]
+
+    PROD_CHK1{"bridge_context.chatId<br>== oc_231f 生产群?"}
+    PROD_CHK1 -- 是 --> SET_PROD["$env:QUAL_PROFILE='prod'<br>确保工具打印 PROFILE=prod"]
+    PROD_CHK1 -- 否 --> LOOKUP
+    SET_PROD --> LOOKUP
+
+    LOOKUP["lookup-case-by-n N<br>→ instanceCode + person<br>唯一来源 pending_actions<br>拒绝凭旧报告猜"]
+    LOOKUP --> VERIFY_P["确认 person 与卡片#N姓名一致<br>最后防线防#N串号"]
+    VERIFY_P --> ASSERT["assertActionable:<br>① allowApprove check<br>  test → 拒绝物理硬锁<br>② pa code 存在<br>③ pa state 不等于 CLOSED<br>④ person 一致性校验"]
+    ASSERT --> ACTION_ROUTE{F A I?}
+
+    ACTION_ROUTE -- F --> F_EXEC["approve:<br>① writeComment AI评论<br>  失败→中止 note铁律<br>② larkApprovalAction approve 🔌connector<br>③ markProcessed approved<br>  audit_reports写 processedAt/Action<br>④ setPAState CLOSED<br>⑤ spawnAutoSync fire-and-forget"]
+    ACTION_ROUTE -- A --> A_EXEC["reject:<br>① writeComment AI评论+退回原因<br>  失败→中止<br>② larkApprovalAction reject 🔌connector<br>③ markProcessed rejected<br>④ setPAState CLOSED<br>⑤ spawnAutoSync<br>实例终止 申请人须重提"]
+    ACTION_ROUTE -- I --> I_EXEC["note:<br>① writeComment 补充要求评论 🔌connector<br>② setPAState:<br>  state=AWAITING_APPLICANT<br>  iCommentTime=now<br>③ spawnAutoSync<br>审批保持开启<br>下轮 list FLIP_ALL 检测回复<br>→ 翻转 APPLICANT_REPLIED"]
+
+    R_START["R 链路 修订重新分析"]
+    R_START --> R_EXEC["① 读 audit_reports 取完整 case<br>② 结合修订原因<br>  执行完整三阶段 禁止简化<br>③ write-result 覆盖原结论<br>④ gen-card Round N<br>  标注 修订复审#N<br>⑤ Turn 结束 再次 INTERRUPT<br>  等用户 F#N 或 A#N 确认"]
+    R_EXEC --> INTERRUPT
+end
+
+F_EXEC & A_EXEC & I_EXEC & S_EXEC --> NEXT_ROUND
+NEXT_ROUND["本轮完成<br>下次 cron 唤醒 → 重新 list"]
+NEXT_ROUND --> CMD_LIST
+
+classDef decision fill:#DBEAFE,stroke:#3B82F6,color:#1E3A8A
+classDef reject fill:#FEE2E2,stroke:#EF4444,color:#7F1D1D
+classDef store fill:#F3E8FF,stroke:#9333EA,color:#581C87
+classDef warn fill:#FEF9C3,stroke:#F59E0B,color:#92400E
+classDef evt fill:#DCFCE7,stroke:#16A34A,color:#14532D
+classDef infra fill:#E0F2FE,stroke:#0284C7,color:#075985
+
+class PROFILE_SEL,RECONCILE,DATE_WIN,PA_CHECK,NODE_GATE,FAST_TRACK_Q,IN_SCOPE_CHECK,VIS_CHK,OCR_GATE_CHK,WR_G1,WR_G2,WR_G3,WR_G4,WR_N_CHK,ALL_DONE,REPLY_TYPE,PROD_CHK1,ACTION_ROUTE,SCOPE_CHK,OTHER_CHK decision
+class WR_R1,WR_R2,WR_R3,WR_R4 reject
+class WR_ATOMIC,WR_PA store
+class FAST_TRACK,INTERRUPT warn
+class START evt
+class CONNECTOR_NOTE infra

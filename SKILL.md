@@ -8,7 +8,7 @@ description: 审核资质/处理待办/资质审批。自动三阶段分析飞�
 > 📦 **首次使用？** 请先阅读 [install.md](install.md) 完成环境配置。
 
 > **环境依赖**：PyMuPDF ✅ | python-docx ✅ | ocr-paddle(PP-OCRv5 经典管线，独立 skill 包) ✅ | LibreOffice ✅（可选；未装则 .doc/非标DOCX 标 failed → 转人工）
-> 附件读取全部由 `audit-tool.cjs`(data-prep) 完成，分诊策略/status 语义/OCR 降级等详细规范：读取并遵循 [references/attachment-reading-spec.md](references/attachment-reading-spec.md)；判断侧"读不出字≠没问题"的处理铁律见 [references/child-judge.md](references/child-judge.md) 附件铁律节。
+> 附件读取全部由 `audit-tool.cjs`(data-prep) 完成，分诊策略/status 语义/OCR 降级等详细规范：读取并遵循 [common/attachment-reading-spec.md](common/attachment-reading-spec.md)；判断侧"读不出字≠没问题"的处理铁律见 [common/child-judge.md](common/child-judge.md) 附件铁律节。
 
 # 资质智能审核助手 v2.1
 
@@ -27,7 +27,7 @@ description: 审核资质/处理待办/资质审批。自动三阶段分析飞�
 
 ## 全局原则（进来先读，全程适用）
 
-**1. 判断由大模型做，不是关键词规则。** 工具 `scripts/audit-tool.cjs` 只给数据、跑确定性红线兜底；"看流向 / 用途 / 背景、要素提取、业务合理性"这些判断由 agent 按 [`references/child-judge.md`](references/child-judge.md) 推理。批量定时跑与人工交互审核**用同一套规格，禁止简化版**（见附录A）。skill 本身不调模型，用哪个大模型由 OpenClaw 决定。
+**1. 判断由大模型做，不是关键词规则。** 工具 `scripts/audit-tool.cjs` 只给数据、跑确定性红线兜底；"看流向 / 用途 / 背景、要素提取、业务合理性"这些判断由 agent 按 [`common/child-judge.md`](common/child-judge.md) 推理。批量定时跑与人工交互审核**用同一套规格，禁止简化版**（见附录A）。skill 本身不调模型，用哪个大模型由 OpenClaw 决定。
 
 **2. 🔴 观点 ≠ 指令 · gen-card = Turn 结束。**
 > - 「我认为 / 感觉 / 应该退回 / 这个有问题」等**意见、观点表达，不触发任何执行动作**。只有明确的 **FAIR 快捷指令**（`F#N` / `A#N 原因：...` / `I#N 要求：...` / `R#N 原因：...`）或其中文等价词（通过/退回/留言/异议）+ 编号，才触发执行；无编号 → 询问确认后再执行。
@@ -40,7 +40,7 @@ description: 审核资质/处理待办/资质审批。自动三阶段分析飞�
 - 证据链核实（材料真伪）只是辅助判断，**逻辑穿透（业务合理性 + 责任判断）才是核心**。
 - **分析一致性**：同一审批实例的所有评论必须使用**同一套完整三阶段分析逻辑**，绝对禁止用简化版/快速规则替代。
 
-**4. 分工。** 判断规格 = [`references/child-judge.md`](references/child-judge.md)（子代理 + R 修订 + 大公子 inline 都读它）；本 SKILL.md 的**步骤 = 父 agent 的编排与 FAIR 执行规格**（子代理用不到）。
+**4. 分工。** 判断规格 = [`common/child-judge.md`](common/child-judge.md)（子代理 + R 修订 + 大公子 inline 都读它）；本 SKILL.md 的**步骤 = 父 agent 的编排与 FAIR 执行规格**（子代理用不到）。
 
 ---
 
@@ -61,13 +61,13 @@ description: 审核资质/处理待办/资质审批。自动三阶段分析飞�
 
 > 🔴 **前提**：本 cron job 必须 `sessionTarget="isolated"` + `payload.kind="agentTurn"`，否则无法 `sessions_spawn` 子代理（main session 只能注入 systemEvent，spawn 不了）。
 
-> 🧠 **核心架构：1 实例 = 1 子代理**。父 agent **只编排**（拿清单 → 逐条 spawn → 收一句话 → 发卡），**绝不亲自跑 `case`/读附件/做三阶段**；每条在各自独立子代理上下文展开，父 agent 上下文恒小。（原由见 references/CHANGELOG.md）
+> 🧠 **核心架构：1 实例 = 1 子代理**。父 agent **只编排**（拿清单 → 逐条 spawn → 收一句话 → 发卡），**绝不亲自跑 `case`/读附件/做三阶段**；每条在各自独立子代理上下文展开，父 agent 上下文恒小。（原由见 common/CHANGELOG.md）
 
 **cron 唤醒父 agent 后，按此编排循环：**
 
 1. 跑 `node scripts/audit-tool.cjs list` 拿待审工作清单（含 instance_code、task_id、申请人、资质、事由摘要）。工具已【翻页拉全量待办】→ 状态过滤（PENDING_REVIEW/CLOSED 跳过）→ 在途优先、最新在前 → 默认只返回最新 **12 条/轮**（节流）。记下返回里的 `remaining`（本轮没返回、留待下轮的条数）；**未返回的不会丢**（无 pa 条目，下轮 list 自动重现）。
 
-2. **逐条 `sessions_spawn` 子代理审核**：对清单里每个 `instance_code`，父 agent 用下方【子代理 spawn prompt 模板】spawn 一个子代理。模板已**自包含**（case→判断→落盘→回话），判断规格指向 `references/child-judge.md`（子代理专读的紧凑规格）。父 agent **只编排——绝不亲自跑 case/读附件/做三阶段**。
+2. **逐条 `sessions_spawn` 子代理审核**：对清单里每个 `instance_code`，父 agent 用下方【子代理 spawn prompt 模板】spawn 一个子代理。模板已**自包含**（case→判断→落盘→回话），判断规格指向 `common/child-judge.md`（子代理专读的紧凑规格）。父 agent **只编排——绝不亲自跑 case/读附件/做三阶段**。
    > 子代理的落盘铁律、分类/场景/三阶段/附件规则，全在【模板 + child-judge.md】里，父不必重复也不该内联。
    > 并发由 OpenClaw `maxConcurrentRuns`（默认 8）自动管；父照清单顺序 spawn 即可，无需自己控并发。
    > 容错：子代理超时/失败没 write-result（也没 batch-skip）→ 父收网时 register-orphans 找回"写了没注册"的、其余 batch-fail；没落盘的下轮 list 自动重新捞回，**不丢、不重**。
@@ -99,7 +99,9 @@ cd <技能包根目录>
 
 🔴【落盘是强制终点，不是可选】：分析了但没 write-result = 这条【等于没做】。请把 10min 预算优先留给"分析完→立刻写 `result_<instance_code>.json`→立刻 `write-result` 到 ok:true→再回话"，宁可分析粗一点也【必须先落盘成功再回话】。
 
-判断规格【优先读场景子文件、回退读全量】：先读 `case` 返回的 `scoped_rules` → `matched_scenes` → 只读对应场景的 JSON（`references/scenes/<scene>.json`）+ 公共判据（`references/scenes/common.json`）。场景覆盖不到的边缘情况才回退读 `references/child-judge.md`。🔴 **场景判据已全部按需注入到场景 JSON 的 `criteria` 字段——不要自己去读** `scene-principles.md` / `analysis-protocol.md`（会耗光你的时间预算）；只有极罕见、JSON 里明确写「见 child-judge」处才去查。**也不要读整份 SKILL.md**（父的编排规格，你用不到）。
+判断规格【优先读场景子文件、回退读全量】：先读 `case` 返回的 `scoped_rules` → `matched_scenes` → 只读对应场景的 JSON（`common/scenes/<scene>.json`）+ 公共判据（`common/scenes/common.json`）。场景覆盖不到的边缘情况才回退读 `common/child-judge.md`。🔴 **场景判据已全部按需注入到场景 JSON 的 `criteria` 字段——不要自己去读** `scene-principles.md` / `analysis-protocol.md`（会耗光你的时间预算）；只有极罕见、JSON 里明确写「见 child-judge」处才去查。**也不要读整份 SKILL.md**（父的编排规格，你用不到）。
+
+**你的岗位**：环境变量 `QUAL_AUDIT_ROLE`。`faren` = 全量（common + faren + feifaren），cross-type 案件归你审；`feifaren` = 只加载 common + feifaren，只有纯非法人资质；未设置 = 全量。
 
 ⏱️ **一遍过【铁律·省时间】**：拿到 case 数据 + child-judge 判据后，【一次性】做完三阶段并落盘——中途【不要再读别的文件、不要再跑别的脚本、不要反复轮询】。你的判断力没问题，别把时间耗在"找资料/等脚本/翻页定位"这些导航动作上（这是历史上超时的真凶）。
 
@@ -113,9 +115,9 @@ cd <技能包根目录>
 
 ---
 
-## 步骤 0/3/4/5a：判断规格 · 附件铁律 · 三阶段 · result 落盘 → 全在 `references/child-judge.md`
+## 步骤 0/3/4/5a：判断规格 · 附件铁律 · 三阶段 · result 落盘 → 全在 `common/child-judge.md`
 
-> 🧠 **判断侧全部规格集中在一处** [`references/child-judge.md`](references/child-judge.md)（子代理专读的紧凑规格），含：资质分类 + 印章边界、场景速查、附件铁律（status≠ok / needs_vision / seal_count / 核原件-物料流向）、三阶段判断、result schema + applicantAction 铁律、落盘强制终点。深度细则见 [`analysis-protocol.md`](references/analysis-protocol.md) / [`scene-principles.md`](references/scene-principles.md)。
+> 🧠 **判断侧全部规格集中在一处** [`common/child-judge.md`](common/child-judge.md)（子代理专读的紧凑规格），含：资质分类 + 印章边界、场景速查、附件铁律（status≠ok / needs_vision / seal_count / 核原件-物料流向）、三阶段判断、result schema + applicantAction 铁律、落盘强制终点。深度细则见 [`analysis-protocol.md`](common/analysis-protocol.md) / [`scene-principles.md`](common/scene-principles.md)。
 > - **子代理**：由 spawn 模板指过去读 child-judge.md，父不必内联判断规格。
 > - **父 agent 需要亲自判断时**（R 修订复审、大公子桥 inline 同步审核）→ 也读 child-judge.md，同一套规格（禁简化版）。
 > **📦 Context 压缩**：每条 `write-result` 返回 `ok:true` 后立即丢弃该 case 全文/推理，context 只留一行 `Case N: 结论`，数据已在 JSON。
@@ -132,12 +134,12 @@ node scripts/audit-tool.cjs list
 
 > **覆盖与节流**：`list` 工具层翻页拉全量待办(仅索引、不进上下文)，杜绝"100/50 名外漏审"；每轮只返回最新 N 条(默认 **12**，传 `list <N>` 可调)，剩余靠状态机下轮续。N 上限受 `maxConcurrentRuns`(并发8)+`timeoutSeconds`+限流+人确认量，经验值 12–15，勿超 30。
 >
-> **🗓️ 日期窗**：`list` 默认只审近 `QUAL_SINCE_DAYS` 天（默认 7）提交的待办；`list --since <天>` 改窗、`list --all` 关窗跑全量。⚠️ **窗口外老 backlog 不被默认覆盖，需定期 `list --all` 清库存**（逆转"永不漏审"的权衡背景见 references/CHANGELOG.md）。
+> **🗓️ 日期窗**：`list` 默认只审近 `QUAL_SINCE_DAYS` 天（默认 7）提交的待办；`list --since <天>` 改窗、`list --all` 关窗跑全量。⚠️ **窗口外老 backlog 不被默认覆盖，需定期 `list --all` 清库存**（逆转"永不漏审"的权衡背景见 common/CHANGELOG.md）。
 
 **故障排查：返回 0 条？**
 1. token 是否有效：`lark-cli auth status`
 2. 确认审批后台确实有待办
-3. 底层命令细节参见 [references/api-guide.md](references/api-guide.md)
+3. 底层命令细节参见 [common/api-guide.md](common/api-guide.md)
 
 ---
 
@@ -149,7 +151,7 @@ node scripts/audit-tool.cjs case <instance_code>
 
 一步返回 `{in_scope, should_skip, form, attachments_summary, ocr_gate, deterministic, applink, case_file}`：读表单、下载附件、文件头判类型、OCR(ocr-paddle 经典管线)提取、确定性红线检查全部封装在内。`in_scope=false` 或 `should_skip=true` 直接跳过该条。附件全文不内联，按需用 `read-attachment <code> <idx>` 取。
 
-> 字段解读（含旧表单字段兼容）、场景豁免覆盖 deterministic 标记的规则（如 L01 诉讼仲裁豁免 R11/R05）、知识库查阅（商标注册表/海外主体/部门负责人）**全部内联在 [`references/child-judge.md`](references/child-judge.md)**——判断侧只维护这一份，SKILL.md 不重复。
+> 字段解读（含旧表单字段兼容）、场景豁免覆盖 deterministic 标记的规则（如 L01 诉讼仲裁豁免 R11/R05）、知识库查阅（商标注册表/海外主体/部门负责人）**全部内联在 [`common/child-judge.md`](common/child-judge.md)**——判断侧只维护这一份，SKILL.md 不重复。
 
 > **📦 Context 压缩规则**：每条 `write-result` 后立即丢弃该 case 全文/推理，context 只留一行摘要（判断规格 + 落盘 schema 见「步骤 0/3/4/5a」指向的 child-judge.md）。
 
@@ -177,7 +179,7 @@ node scripts/audit-tool.cjs gen-card 1 "" 145
 > 🔴 **gen-card 调用成功后，当前 Turn 立即结束，不得再调用 `approve` / `reject` / `note`。**
 > 等用户回复 FAIR 指令（F#N / A#N / I#N / R#N），由新 Turn 执行。
 
-> **⚠️ 卡片发送**：大卡（15–20KB）必须走 `feishu-common.ps1` REST；`lark-cli im send-card --as bot` 与 MCP `im_v1_message_create` 都会失败——具体报错/大小限制见 [references/card-generation-pitfalls.md](references/card-generation-pitfalls.md)（底部已列为发卡前必看）。
+> **⚠️ 卡片发送**：大卡（15–20KB）必须走 `feishu-common.ps1` REST；`lark-cli im send-card --as bot` 与 MCP `im_v1_message_create` 都会失败——具体报错/大小限制见 [common/card-generation-pitfalls.md](common/card-generation-pitfalls.md)（底部已列为发卡前必看）。
 > **交互方式**：用户在卡片下方文字回复（见步骤 5-2），不使用卡片按钮回调。
 
 ---
@@ -201,7 +203,7 @@ $env:QUAL_PROFILE='prod'; $env:QUAL_ACTOR_OPEN_ID='<bridge_context.senderId>'; n
 
 > 下面的逐 token 命令表 = `fair` 内部所做的事 / 需要单条精确操作或排障时的底层参考。**日常 FAIR 一律走上面那一条 `fair`，不要手动逐条跑。**
 
-> 🔴 **铁律：FAIR 执行只准走 `audit-tool.cjs` 的 `approve` / `reject` / `note`**（它把三步绑成原子事务：写评论 → 飞书审批动作 → 更新 pending_actions=CLOSED）。**绝对禁止手搓 `lark-cli api POST 评论` / `approval tasks reject` 自己拼审批动作**——那样只做飞书侧、漏掉第三步状态记账 → 缓存漂移、三方不一致（A#5 事故，见 references/CHANGELOG.md）。
+> 🔴 **铁律：FAIR 执行只准走 `audit-tool.cjs` 的 `approve` / `reject` / `note`**（它把三步绑成原子事务：写评论 → 飞书审批动作 → 更新 pending_actions=CLOSED）。**绝对禁止手搓 `lark-cli api POST 评论` / `approval tasks reject` 自己拼审批动作**——那样只做飞书侧、漏掉第三步状态记账 → 缓存漂移、三方不一致（A#5 事故，见 common/CHANGELOG.md）。
 > ⚠️ 注意分阶段：「别裸调脚本」的约定只针对**分析/编排阶段**（防绕过 INTERRUPT 写未确认评论）；**FAIR 执行阶段恰恰必须调这些原子命令**——它们就是为安全落地设计的，绕开反而更危险。两阶段别混为一谈。
 > 🟢 **生产 FAIR 必须 `QUAL_PROFILE=prod`**：否则默认 test，`approve/reject/note` 会被硬锁拒绝（报 `allowApprove=false`）。执行前确认工具启动打印的 `PROFILE=prod`。
 > 🔴 **群判定规则（2026-07-02 实测踩坑；2026-07-12 生产群改为 oc_231f）**：用户在生产群 `oc_231fbee0b63f15721bc550e75897b818` 回 FAIR 会拉起【新的大公子会话】，它默认 test 会拦下审批。**处理生产群 FAIR 前，先看 `bridge_context.chatId`：若 == `oc_231fbee0b63f15721bc550e75897b818`（旧群 oc_b3f3cf 已废） → 先 `$env:QUAL_PROFILE='prod'` 再跑 audit-tool。**
@@ -223,7 +225,7 @@ $env:QUAL_PROFILE='prod'; $env:QUAL_ACTOR_OPEN_ID='<bridge_context.senderId>'; n
 
 **批量示例**：`F#1 #2 A#3 原因：不合规 I#5 要求：补材料`
 
-> 执行前检查清单 + F/A/I/R 四条执行链的逐步命令走位 → [references/execution-chains.md](references/execution-chains.md)（日常照上表走即可；只在需要核对具体命令顺序/参数时才展开）。安全关键的委托授权 / 群判定 / note 铁律仍在上方正文内联。
+> 执行前检查清单 + F/A/I/R 四条执行链的逐步命令走位 → [common/execution-chains.md](common/execution-chains.md)（日常照上表走即可；只在需要核对具体命令顺序/参数时才展开）。安全关键的委托授权 / 群判定 / note 铁律仍在上方正文内联。
 
 ---
 
@@ -231,20 +233,20 @@ $env:QUAL_PROFILE='prod'; $env:QUAL_ACTOR_OPEN_ID='<bridge_context.senderId>'; n
 
 **触发条件**：`write-result` JSON 未生成，或卡片流（步骤 5b）不可用时。正常情况走步骤 5a/5b/5-2。
 
-读取并遵循 [references/legacy-comment-flow.md](references/legacy-comment-flow.md)（该文件另收录：原步骤 5-1「分析报告格式」在 examples.md、原步骤 6「修正版」在 legacy-comment-flow.md 末尾）。
+读取并遵循 [common/legacy-comment-flow.md](common/legacy-comment-flow.md)（该文件另收录：原步骤 5-1「分析报告格式」在 examples.md、原步骤 6「修正版」在 legacy-comment-flow.md 末尾）。
 
 ---
 
 ## 附录A：分析一致性 · 错误降级策略
 
-读取并遵循 [references/analysis-protocol.md](references/analysis-protocol.md) 第三节（同一审批只写一次评论、发现冲突写统一版、绝对禁止简化版替代三阶段、错误降级策略表）。
+读取并遵循 [common/analysis-protocol.md](common/analysis-protocol.md) 第三节（同一审批只写一次评论、发现冲突写统一版、绝对禁止简化版替代三阶段、错误降级策略表）。
 
 ---
 
-> **audit-tool.cjs 子命令速查（参数/返回值/错误排查）：[references/audit-tool-ref.md](references/audit-tool-ref.md)**
-> 底层 API 命令报错时，查阅故障排查：[references/api-guide.md](references/api-guide.md)
-> 写评论时对照输出示例：[references/examples.md](references/examples.md)
-> 遇到判断疑难时查阅历史案例：[references/failure-cases-archive.md](references/failure-cases-archive.md)
-> 附件读取规范（步骤 3 执行前读取并遵循）：[references/attachment-reading-spec.md](references/attachment-reading-spec.md)
-> **卡片生成/排序/隔离/PS5.1 陷阱（步骤 5b 发卡前读，多条卡片必看）：[references/card-generation-pitfalls.md](references/card-generation-pitfalls.md)**
-> **端到端流程全貌（含全部分支、状态机节点、规则触发点）：[references/diagram-technical.mmd](references/diagram-technical.mmd)（技术流程图，Mermaid；`references/push-diagrams.ps1` 可推送到飞书白板查看）——需要俯瞰整体编排/排查某分支落在哪一步时看它。**
+> **audit-tool.cjs 子命令速查（参数/返回值/错误排查）：[common/audit-tool-ref.md](common/audit-tool-ref.md)**
+> 底层 API 命令报错时，查阅故障排查：[common/api-guide.md](common/api-guide.md)
+> 写评论时对照输出示例：[common/examples.md](common/examples.md)
+> 遇到判断疑难时查阅历史案例：[common/failure-cases-archive.md](common/failure-cases-archive.md)
+> 附件读取规范（步骤 3 执行前读取并遵循）：[common/attachment-reading-spec.md](common/attachment-reading-spec.md)
+> **卡片生成/排序/隔离/PS5.1 陷阱（步骤 5b 发卡前读，多条卡片必看）：[common/card-generation-pitfalls.md](common/card-generation-pitfalls.md)**
+> **端到端流程全貌（含全部分支、状态机节点、规则触发点）：[common/diagram-technical.mmd](common/diagram-technical.mmd)（技术流程图，Mermaid；`common/push-diagrams.ps1` 可推送到飞书白板查看）——需要俯瞰整体编排/排查某分支落在哪一步时看它。**

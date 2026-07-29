@@ -42,7 +42,7 @@ const { runDeterministicChecks, loadEntities } = require('../lib/deterministic-c
 const { checkNamedPersonRank } = require('../lib/named-person-rank.js');
 const { checkPhoneRoster, normPhone: normRosterPhone } = require('../lib/phone-roster-check.js');
 const { checkTrademarkAuth, normRegNo: normTmRegNo } = require('../lib/trademark-auth-check.js');
-const { isInScope, MY_AUDIT_QUALS } = require('../lib/scope-filter.js');
+const { isInScope, isInMyRole, MY_AUDIT_QUALS } = require('../lib/scope-filter.js');
 const { hasAIComment, writeComment, extractCommentAttachments } = require('../lib/comment-manager.js');
 const { withLock, atomicWriteFileSync } = require('../lib/file-lock.js');
 // L1 飞书接入连接器（P0 收拢）：本文件所有 lark-cli 传输统一委托到此模块
@@ -260,7 +260,7 @@ function buildTrademarkRegIndex() {
   if (_tmRegCache) return _tmRegCache;
   const empty = { regIndex: new Map(), ourEntities: [], creditMap: {} };
   try {
-    const reg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'references', 'trademark-registry-full.json'), 'utf8'));
+    const reg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'common', 'trademark-registry-full.json'), 'utf8'));
     const ents = (reg && reg.entities) || {};
     const regIndex = new Map();
     const registryOwners = [];
@@ -892,6 +892,10 @@ async function cmdCase(code, opt) {
     if (_nm) form['申请人'] = _nm;
   }
   let inScope = isInScope(form);
+  // 角色过滤：非本岗位的跳过（"其它"除外，留给子代理在 case 里判）
+  if (inScope) {
+    if (!isInMyRole(qualStr) && !qualStr.includes('其它')) inScope = false;
+  }
   const qField = form['申请资质'] || form['拟用资质'];
   const quals = Array.isArray(qField) ? qField : [qField];
 
@@ -1028,7 +1032,7 @@ async function cmdCase(code, opt) {
   // 减少子代理上下文负载，消除"套错场景规则"（如银行场景套了合作场景的合同要求）
   let scoped_rules = null;
   try {
-    const idxPath = path.join(__dirname, '..', 'references', 'scenes', 'index.json');
+    const idxPath = path.join(__dirname, '..', 'common', 'scenes', 'index.json');
     if (fs.existsSync(idxPath)) {
       const idx = JSON.parse(fs.readFileSync(idxPath, 'utf8'));
       const matchedScenes = new Set();
