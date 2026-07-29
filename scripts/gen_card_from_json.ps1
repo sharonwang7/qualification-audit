@@ -1,4 +1,4 @@
-# gen_card_from_json.ps1 — 从结构化 JSON 生成资质审核飞书卡片
+﻿# gen_card_from_json.ps1 — 从结构化 JSON 生成资质审核飞书卡片
 # 用法: powershell -File gen_card_from_json.ps1 [-Date YYYYMMDD] [-ChatId oc_xxx] [-Round N]
 # 不传 Date：自动从 pending_actions.json 里找 PENDING_REVIEW 案件的 date 字段，定位正确报告文件；
 # 显式传 Date：强制读该日期文件（历史复盘用）。
@@ -60,8 +60,8 @@ function Invoke-FeishuApi {
 #   按 QUAL_PROFILE=test 自动兜底 test 的 pending/报告目录 + zizhi 身份，避免：①读到【生产】pending_actions/报告 → 筛不到 test 案件 → 空卡；②没设身份 → 落到 claude_bot(大公子) 发卡。
 #   走 audit-tool gen-card 时这些 env 已被工具设好，本段是 no-op；prod 手动跑用其自身默认(生产路径+claude_bot=大公子)，不受影响。
 if ($env:QUAL_PROFILE -eq 'test') {
-    if (-not $env:QUAL_PENDING_ACTIONS) { $env:QUAL_PENDING_ACTIONS = 'D:\agent-hub\_test\pending_actions.test.json' }
-    if (-not $env:QUAL_AUDIT_DIR)        { $env:QUAL_AUDIT_DIR = 'D:\agent-hub\_test\audit_reports' }
+    if (-not $env:QUAL_PENDING_ACTIONS) { $env:QUAL_PENDING_ACTIONS = "$PSScriptRoot\..\..\_test\pending_actions.test.json" }
+    if (-not $env:QUAL_AUDIT_DIR)        { $env:QUAL_AUDIT_DIR = "$PSScriptRoot\..\..\_test\audit_reports" }
     if (-not $env:QUAL_CARD_BOT_ACCOUNT) { $env:QUAL_CARD_BOT_ACCOUNT = 'zizhi' }
     if (-not $env:LARK_AUDIT_CHAT_ID)    { $env:LARK_AUDIT_CHAT_ID = 'oc_e8198717e2b926d97fb9007171aef2af' }
     if (-not $ChatId)                    { $ChatId = 'oc_e8198717e2b926d97fb9007171aef2af' }
@@ -76,11 +76,11 @@ function categorizeSeal($sealType, $stored) {
     return 'A'
 }
 if (-not $ChatId) { $ChatId = "oc_3b0f48c1c9809c32e3749788da412078" }
-$AuditDir = if ($env:QUAL_AUDIT_DIR) { $env:QUAL_AUDIT_DIR } else { "D:\agent-hub\audit_reports" }
+$AuditDir = if ($env:QUAL_AUDIT_DIR) { $env:QUAL_AUDIT_DIR } else { "$PSScriptRoot\..\..\audit_reports" }
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 # ── 加载 pending_actions（pa）──
-$paPath = if ($env:QUAL_PENDING_ACTIONS) { $env:QUAL_PENDING_ACTIONS } else { "D:\agent-hub\pending_actions.json" }
+$paPath = if ($env:QUAL_PENDING_ACTIONS) { $env:QUAL_PENDING_ACTIONS } else { "$PSScriptRoot\..\..\pending_actions.json" }
 $pa = $null
 if (Test-Path $paPath) {
     try { $pa = [System.IO.File]::ReadAllText($paPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json } catch {}
