@@ -762,6 +762,9 @@ function cmdList(limit, sinceDays) {
   for (const t of candidateTasks) {
     const entry = pa[t.instance_code];
     if (!entry) {
+      // 角色过滤：新件只看本岗位管辖的（各管各的）；「其它」类留到 case 里判
+      const qualStr = summaryVal(t.summaries, '申请资质') || '';
+      if (!isInMyRole(qualStr) && !qualStr.includes('其它')) continue;
       worklist.push({ ...t, pa_state: 'new' });
     } else if (entry.state === 'PENDING_REVIEW') {
       // 已审核待批复 → gen-card 直读 JSON，不需要重新 spawn 子代理
