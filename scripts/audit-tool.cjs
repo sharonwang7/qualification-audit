@@ -1856,7 +1856,7 @@ function cmdGenCard(round, date, remaining) {
   let script = process.env.QUAL_CARD_SCRIPT;
   if (!script) {
     // 自动探测：标准部署下 skill 在 .../skills/qualification-audit/，gen_card_from_json.ps1 在 .../scripts/
-    const candidate = path.join(CWD, '..', '..', 'scripts', 'gen_card_from_json.ps1');
+    const candidate = path.join(CWD, 'scripts', 'gen_card_from_json.ps1');
     if (fs.existsSync(candidate)) {
       script = candidate;
       console.error(`[qual-audit] QUAL_CARD_SCRIPT 未设，自动探测到 ${candidate}`);
