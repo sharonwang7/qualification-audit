@@ -1,12 +1,6 @@
 ---
 name: qualification-audit
-description: |
-  Trigger when user says "审核资质", "处理待办", "资质审批", "检查审批",
-  "跑资质", "跑一下资质", "看看待办", "看看今天待办", "资质待办".
-  Use when the user asks to audit qualification approvals, check pending tasks,
-  or review 资质申请 workflows.
-  自动审核飞书审批「资质申请」工作流，进行证据链核实+逻辑穿透+风险控制并写入评论。
-  不用于：非资质类审批、代码审查、安全审查、一般性聊天。
+description: 审核资质/处理待办/资质审批。自动三阶段分析飞书「资质申请」并写评论。不用于非资质类审批。
 ---
 
 > ⚠️ **运行环境**：当前路径约定针对 Windows（`D:\`、`C:\`）；Linux/Mac 需适配 `QUAL_ATTACH_DIR`、`QUAL_SOFFICE_BIN`、`QUAL_CARD_SCRIPT` 等路径类环境变量。
