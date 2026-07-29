@@ -1,0 +1,18 @@
+# CODEOWNERS — 资质审核 skill 包 目录所有权
+# 说明：改到哪个目录 → 要求对应 owner approve 才能合并
+# 等同事注册 GitHub 账号后，把 TODO 占位替换为 @github-username
+
+# 共用：双方都必须 approve
+common/       @sharonwang7
+scripts/      @sharonwang7
+lib/          @sharonwang7
+SKILL.md      @sharonwang7
+install.md    @sharonwang7
+.env.example  @sharonwang7
+
+# 法人团队（faren）
+faren/        @sharonwang7
+
+# 非法人团队（feifaren）— 杜益、余佩琳
+# 等杜益/余佩琳注册 GitHub 后，替换下面占位：
+feifaren/     @TODO-duyi @TODO-yupeilin
