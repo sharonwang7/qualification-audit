@@ -620,9 +620,9 @@ function cmdList(limit, sinceDays) {
     return {
       ok: false,
       needs_role_setup: true,
-      hint: '请选择你的岗位：法人岗（法定代表人签名/营业执照/股东类）或 非法人岗（品牌授权书/商标注册证/商标授权书）。',
+      hint: '请选择你的岗位：法人岗（法定代表人签名/股东/董事类）或 非法人岗（品牌授权书/商标注册证/商标授权书）。以卡片选择为准。',
       roles: [
-        { value: 'faren', label: '法人岗', desc: '审核法定代表人签名、营业执照、股东/董事/法人相关资质' },
+        { value: 'faren', label: '法人岗', desc: '审核法定代表人签名、股东、董事等相关资质' },
         { value: 'feifaren', label: '非法人岗', desc: '审核品牌授权书、商标注册证、商标授权书等' }
       ]
     };
