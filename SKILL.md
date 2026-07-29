@@ -105,6 +105,8 @@ cd <技能包根目录>
 
 判断规格【优先读场景子文件、回退读全量】：先读 `case` 返回的 `scoped_rules` → `matched_scenes` → 只读对应场景的 JSON（`common/scenes/<scene>.json`）+ 公共判据（`common/scenes/common.json`）。场景覆盖不到的边缘情况才回退读 `common/child-judge.md`。🔴 **场景判据已全部按需注入到场景 JSON 的 `criteria` 字段——不要自己去读** `scene-principles.md` / `analysis-protocol.md`（会耗光你的时间预算）；只有极罕见、JSON 里明确写「见 child-judge」处才去查。**也不要读整份 SKILL.md**（父的编排规格，你用不到）。
 
+🔴 **JSON 铁律**：result JSON 的 `fullAnalysis` 和其他字符串值内【严禁裸双引号 `"`】——中文引号必须用 `「」` 替代 `"..."`，英文引号用单引号。write-result 用 Python 的 `json.loads()` 解析，一个裸双引号就直接拒绝。落盘前必须跑 `python -c "import json; json.load(open('result_xxx.json'))"` 自检。
+
 **你的岗位**：环境变量 `QUAL_AUDIT_ROLE`。`faren` = 全量（common + faren + feifaren），cross-type 案件归你审；`feifaren` = 只加载 common + feifaren，只有纯非法人资质；未设置 = 全量。
 
 ⏱️ **一遍过【铁律·省时间】**：拿到 case 数据 + child-judge 判据后，【一次性】做完三阶段并落盘——中途【不要再读别的文件、不要再跑别的脚本、不要反复轮询】。你的判断力没问题，别把时间耗在"找资料/等脚本/翻页定位"这些导航动作上（这是历史上超时的真凶）。
