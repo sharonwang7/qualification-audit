@@ -29,6 +29,16 @@ QUAL_AUDIT_ROLE=feifaren  # 非法人岗 — 只加载 common + feifaren
 | 同时含两种类型（cross-type） | **硬规则归法人岗** |
 | 「其它」 | 两边都进 list，子代理 case 里判 |
 
+### 首次运行 · 角色引导
+
+如果 `QUAL_AUDIT_ROLE` 未设置：
+
+1. `list` 返回 `needs_role_setup: true` → 发飞书卡片让用户选岗
+2. 用户选「法人岗」或「非法人岗」→ 写入 `.env` → 回复确认
+3. 之后所有操作自动按角色过滤，无需重复设置
+
+> 用户也可以手动编辑 `.env`：取消 `QUAL_AUDIT_ROLE=faren` 注释即可。
+
 ### 岗位如何影响审核流程
 
 1. **`list`**：`isInMyRole()` 在 `lib/scope-filter.js` 自动按角色过滤
@@ -41,6 +51,8 @@ QUAL_AUDIT_ROLE=feifaren  # 非法人岗 — 只加载 common + feifaren
 ---
 
 ## 主流程（父 agent 编排）
+
+0. **首次检查**：`list` 若返回 `needs_role_setup: true` → 发飞书卡片让用户选择「法人岗/非法人岗」→ 用户选后写入 `.env` → 回复确认。之后重跑 `list`。
 
 1. **list** → `node scripts/audit-tool.cjs list [N] [--since 天] [--all]`
    拿待审清单（最新 12 条/轮）。返回格式 → [common/audit-tool-ref.md](common/audit-tool-ref.md)

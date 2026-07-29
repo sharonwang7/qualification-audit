@@ -615,6 +615,19 @@ function cmdList(limit, sinceDays) {
   //   ⚠️ 只影响子代理的台账/群路由；approve 硬锁仍只认【显式 env prod】(line 54/1470)、不读此 sentinel → fail-safe 不受影响。
   try { const _sp = path.join(__dirname, '..', 'scratch', 'active_profile'); fs.mkdirSync(path.dirname(_sp), { recursive: true }); fs.writeFileSync(_sp, QUAL_PROFILE); } catch (e) {}
 
+  // 0. 首次运行检测：QUAL_AUDIT_ROLE 未设 → 返回 needs_role_setup，agent 发卡片引导用户选择
+  if (!process.env.QUAL_AUDIT_ROLE) {
+    return {
+      ok: false,
+      needs_role_setup: true,
+      hint: '请选择你的岗位：法人岗（法定代表人签名/营业执照/股东类）或 非法人岗（品牌授权书/商标注册证/商标授权书）。',
+      roles: [
+        { value: 'faren', label: '法人岗', desc: '审核法定代表人签名、营业执照、股东/董事/法人相关资质' },
+        { value: 'feifaren', label: '非法人岗', desc: '审核品牌授权书、商标注册证、商标授权书等' }
+      ]
+    };
+  }
+
   // 1. 翻页拉全部待办（工具内，纯索引）
   let tasks = [];
   let pageToken = null;
