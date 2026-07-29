@@ -26,7 +26,7 @@ const AUDIT_DIR  = process.env.QUAL_AUDIT_DIR  || 'D:\\agent-hub\\audit_reports'
 const ATTACH_DIR = process.env.QUAL_ATTACH_DIR || 'D:\\fando-ocr-cache';
 const WRITE = process.argv.includes('--write');
 
-// 规则分量（取自 references/deterministic-rules.json 的 severity/action，2026-07-17 核对）
+// 规则分量（取自 common/deterministic-rules.json 的 severity/action，2026-07-17 核对）
 // action=SUPPLEMENT → 规则明确要求「需补充」。它响了却判「通过」= 子代理驳回了它 → 值得读。
 const SUPPLEMENT_RULES = ['R01', 'R02', 'R03', 'R05', 'R06', 'R07', 'R11'];
 // action=CONFIRM（提示人工确认）/ fail-open 提示 / 附件铁律明文可覆盖 → 覆盖属正常设计，不报。

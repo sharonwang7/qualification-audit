@@ -79,7 +79,7 @@
       "severity": "MAJOR",
       "ref": "P3",
       "action": "SUPPLEMENT",
-      "message": "【R05/P3】法人资质对外提供须有外部客观证据，本条仅为提示。判据以 references/child-judge.md 的【法人资质对外·证据门槛｜2026-07-17 王爷定】为准，勿以本行文字替代该判据。"
+      "message": "【R05/P3】法人资质对外提供须有外部客观证据，本条仅为提示。判据以 common/child-judge.md 的【法人资质对外·证据门槛｜2026-07-17 王爷定】为准，勿以本行文字替代该判据。"
     },
     {
       "id": "R06",

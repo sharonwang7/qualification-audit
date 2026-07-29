@@ -3,7 +3,7 @@
  * build-registry-from-csv.js
  *
  * Rebuild the two CSV-authoritative trademark subjects in
- * references/trademark-registry-full.json from the raw CSV exports
+ * common/trademark-registry-full.json from the raw CSV exports
  * under data/trademark-csv/.  Idempotent: safe to re-run.
  *
  * Authoritative CSV sources (王爷 exports, "已注册现用"):

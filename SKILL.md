@@ -10,7 +10,48 @@ description: 审核资质/处理待办/资质审批。自动三阶段分析飞�
 > **环境依赖**：PyMuPDF ✅ | python-docx ✅ | ocr-paddle(PP-OCRv5 经典管线，独立 skill 包) ✅ | LibreOffice ✅（可选；未装则 .doc/非标DOCX 标 failed → 转人工）
 > 附件读取全部由 `audit-tool.cjs`(data-prep) 完成，分诊策略/status 语义/OCR 降级等详细规范：读取并遵循 [common/attachment-reading-spec.md](common/attachment-reading-spec.md)；判断侧"读不出字≠没问题"的处理铁律见 [common/child-judge.md](common/child-judge.md) 附件铁律节。
 
-# 资质智能审核助手 v2.1
+# 资质智能审核助手 v3.0
+
+## ⚙️ 角色路由（Monorepo v3.0）
+
+本技能支持**法人岗**和**非法人岗**两种角色，通过环境变量 `QUAL_AUDIT_ROLE` 控制。
+
+### 怎么设
+
+```bash
+# .env
+QUAL_AUDIT_ROLE=faren     # 法人岗 — 全量加载（common + faren + feifaren）
+QUAL_AUDIT_ROLE=feifaren  # 非法人岗 — 只加载 common + feifaren
+# 不设 = 全量
+```
+
+### 分流规则（见 lib/scope-filter.js）
+
+| 资质词根 | 归属 |
+|----------|------|
+| 法定代表人 / 法人 / 董事 / 股东 | **法人岗** |
+| 品牌授权书 / 商标注册证 / 商标授权书 / 授权书 | **非法人岗** |
+| 同时含两种类型（cross-type） | **硬规则归法人岗** |
+| 「其它」（不命中任何词根） | 两边都进 list，子代理 case 里判 |
+
+### 岗位如何影响审核流程
+
+1. **`list`**：自动按角色过滤待办，`isInMyRole()` 在 `scope-filter.js` 里算
+2. **`case`**：按角色加载场景规则 — faren 读全量（`common/` + `faren/` + `feifaren/` 场景 JSON），feifaren 只读 `common/` + `feifaren/`
+3. **spawn 子代理**：环境变量 `QUAL_AUDIT_ROLE` 透传，子代理据此决定审核范围
+4. **CODEOWNERS 控制**：`common/` 双方 approve 才能改，`faren/` faren 团队改，`feifaren/` feifaren 团队改
+
+### 目录结构
+
+```
+qualification-audit/
+├── common/           ← 双方共享，修改需双方 approve
+│   └── scenes/       ← 6 个通用场景 JSON
+├── faren/            ← 法人岗专属规则
+│   └── scenes/       ← legal_rep.json
+└── feifaren/         ← 非法人岗专属规则
+    └── scenes/       ← trademark.json
+```
 
 **适用审批**：资质申请（definition_code: `0E0BBB7F-A4C8-471F-8051-3E4E88A83856`）
 

@@ -53,13 +53,13 @@
 
 | 资产 | 消费方 | 类别 | 抽取护栏 |
 |---|---|---|---|
-| `references/scene-principles.md`（P01–P03 场景原则） | agent 上下文 | 专有 | agent-eval |
-| `references/examples.md`（资质评论范例） | agent 上下文 | 专有 | agent-eval |
-| `references/deterministic-rules.json`（R02/R05… 红线定义） | 代码（deterministic-checker） | 专有 | golden T1 |
-| `references/entities.json`（内部/海外主体） | 代码 + 部分 agent 引用 | 专有 | golden（代码路径）；引用文案变更需 agent-eval |
-| `references/overseas-entities.json` | 代码 | 专有 | golden T1 |
-| `references/department-directors.json`（各中心负责人） | 代码（named-person-rank，fail-open） | 专有 | golden T1 |
-| `references/trademark-registry-full.json`（商标库 82KB） | 代码（待确认消费方） | 专有 | golden T1（确认消费方后） |
+| `common/scene-principles.md`（P01–P03 场景原则） | agent 上下文 | 专有 | agent-eval |
+| `common/examples.md`（资质评论范例） | agent 上下文 | 专有 | agent-eval |
+| `common/deterministic-rules.json`（R02/R05… 红线定义） | 代码（deterministic-checker） | 专有 | golden T1 |
+| `common/entities.json`（内部/海外主体） | 代码 + 部分 agent 引用 | 专有 | golden（代码路径）；引用文案变更需 agent-eval |
+| `common/overseas-entities.json` | 代码 | 专有 | golden T1 |
+| `common/department-directors.json`（各中心负责人） | 代码（named-person-rank，fail-open） | 专有 | golden T1 |
+| `common/trademark-registry-full.json`（商标库 82KB） | 代码（待确认消费方） | 专有 | golden T1（确认消费方后） |
 | `lib/deterministic-checker.js`（确定性红线引擎） | 代码 | 专有 | golden T1 |
 | `lib/scope-filter.js`（管辖范围 isInScope） | 代码 | 专有 | golden T1 |
 | `lib/named-person-rank.js`（实名人职级，纯逻辑已解耦） | 代码 | 专有 | golden T1 |

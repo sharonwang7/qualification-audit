@@ -61,7 +61,7 @@
 
 ### A. 从审核报告文档提取（推荐，含缓存）
 
-> 前提：已完成分析报告输出（格式见 references/examples.md「分析报告格式」节），将分析报告写入飞书云文档并取得 `doc_id`。若未写云文档，直接用方式 B。
+> 前提：已完成分析报告输出（格式见 common/examples.md「分析报告格式」节），将分析报告写入飞书云文档并取得 `doc_id`。若未写云文档，直接用方式 B。
 
 **Step A-1（批量缓存，写评论前先跑一次）**：
 ```bash
@@ -96,4 +96,4 @@ node scripts/audit-tool.cjs comment <instance_code> <临时文件>
 
 **核心规则**：修正=完整重新审核，不是复述。必须：①说明修正原因 ②列出附件结果 ③重新分析 ④给出新结论。
 
-> **历史降级（统一版）**：`comment` 返回 `needs_unified:true` 时 → 写统一版（完整三阶段重审，标题含"（统一版）"，说明冲突）。新流程已基本消除，仅兜底。（背景见 references/CHANGELOG.md）
+> **历史降级（统一版）**：`comment` 返回 `needs_unified:true` 时 → 写统一版（完整三阶段重审，标题含"（统一版）"，说明冲突）。新流程已基本消除，仅兜底。（背景见 common/CHANGELOG.md）

@@ -95,8 +95,8 @@ const PROFILES = {
     chatId:   process.env.LARK_AUDIT_CHAT_ID   || 'oc_231fbee0b63f15721bc550e75897b818',
     chatB:    process.env.QUAL_CARD_B_CHAT     || 'oc_b3d2d2ec90d16d1f594a73dc56583af2',  // Card B（商标+授权）群
     identity: process.env.FEISHU_USER_OPEN_ID  || 'ou_102cae80079463e6c8281777fec96f47',
-    auditDir: process.env.QUAL_AUDIT_DIR       || 'D:\\agent-hub\\audit_reports',
-    pending:  process.env.QUAL_PENDING_ACTIONS || 'D:\\agent-hub\\pending_actions.json',
+    auditDir: process.env.QUAL_AUDIT_DIR       || path.join(SKILL_ROOT, '..', 'audit_reports'),
+    pending:  process.env.QUAL_PENDING_ACTIONS || path.join(SKILL_ROOT, '..', 'pending_actions.json'),
     allowApprove: true,
     // 发卡身份（feishu account key）。空=沿用 gen_card 默认（config.json claude_bot=大公子），生产维持现状零改动。
     cardBotAccount: process.env.QUAL_CARD_BOT_ACCOUNT || 'zizhi',  // 2026-07-24 王爷定：zizhi 独跑生产 → prod 卡也由 zizhi 发（原默认空=大公子）
@@ -160,13 +160,14 @@ const USER_OPEN_ID = (() => {
   }
   return CFG.identity;
 })();
-const ATTACH_DIR = process.env.QUAL_ATTACH_DIR || 'D:\\fando-ocr-cache';
+const SKILL_ROOT = path.join(__dirname, '..');
+const ATTACH_DIR = process.env.QUAL_ATTACH_DIR || path.join(SKILL_ROOT, '..', 'fando-ocr-cache');
 const CWD = process.cwd();
 const PREVIEW_CHARS = 240;
 const READ_DEFAULT_MAX = 4000;
 
 // approve/reject/note 成功后 fire-and-forget 同步 bitable（兼容 大公子 和 OpenClaw）
-const SYNC_SCRIPT = process.env.QUAL_SYNC_SCRIPT || 'D:\\agent-hub\\scripts\\sync-audit-bitable.cjs';
+const SYNC_SCRIPT = process.env.QUAL_SYNC_SCRIPT || path.join(SKILL_ROOT, '..', 'scripts', 'sync-audit-bitable.cjs');
 function spawnAutoSync() {
   if (!fs.existsSync(SYNC_SCRIPT)) return;
   const child = spawn('node', [SYNC_SCRIPT, '--days=7'], {
@@ -2104,7 +2105,7 @@ function cmdGenCard(round, date, remaining) {
   // 📤 发卡后自动同步吞吐轮次 → bitable（fire-and-forget，2026-07-13，B）：发一批就更一次，让「AI吞吐·轮次」表准实时。
   //   仅生产触发（CFG.allowApprove=prod；sync 读的是生产 rounds.jsonl，test 无需推）；detached+unref → 不阻塞发卡、失败绝不影响主流程。
   try {
-    const _syncScript = 'D:\\agent-hub\\scripts\\sync-rounds-bitable.cjs';
+    const _syncScript = path.join(SKILL_ROOT, '..', 'scripts', 'sync-rounds-bitable.cjs');
     if (CFG.allowApprove && fs.existsSync(_syncScript)) {
       const _c = require('child_process').spawn(process.execPath, [_syncScript], { detached: true, stdio: 'ignore', cwd: path.dirname(_syncScript), windowsHide: true });
       _c.unref();

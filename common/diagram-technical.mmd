@@ -130,7 +130,7 @@ IN_SCOPE_CHECK -- 否 --> STEP0
 %% 改这里: 资质分类、场景识别、知识库查询逻辑、OCR 容错策略、三阶段规则
 %% ══════════════════════════════════════════════════════════
 subgraph AUDIT_FLOW["🔍 步骤0/4：三阶段深度审核 大模型判断"]
-    STEP0["步骤0a: 资质分类<br>法人/董事/品牌授权书<br>商标注册证/商标授权书/其他<br><br>步骤0b: 场景识别<br>读 references/scene-principles.md<br>诉讼仲裁 银行证券金融<br>平台举证入驻 合作授权类 新项目<br>可叠加多场景 → 读对应多章节"]
+    STEP0["步骤0a: 资质分类<br>法人/董事/品牌授权书<br>商标注册证/商标授权书/其他<br><br>步骤0b: 场景识别<br>读 common/scene-principles.md<br>诉讼仲裁 银行证券金融<br>平台举证入驻 合作授权类 新项目<br>可叠加多场景 → 读对应多章节"]
     STEP0 --> KB_LOOKUP["按需查知识库 不强制每条都读:<br>trademark-registry-full.json 核商标注册号归属<br>overseas-entities.json 确认海外主体<br>department-directors.json 核负责人签批"]
     KB_LOOKUP --> VIS_CHK{附件含 needs_vision?}
     VIS_CHK -- 是 --> VIS_READ["用 image() 读取 vision_paths<br>扫描PDF: vision_paths含多张页图<br>识别内容当作附件正文纳入三阶段<br>truncated_pages=true → 结论保守<br>+提示需人工核对原件后页"]
