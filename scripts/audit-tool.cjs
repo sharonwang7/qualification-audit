@@ -908,11 +908,12 @@ async function cmdCase(code, opt) {
   }
   let inScope = isInScope(form);
   // 角色过滤：非本岗位的跳过（"其它"除外，留给子代理在 case 里判）
+  const qField = form['申请资质'] || form['拟用资质'];
+  const quals = Array.isArray(qField) ? qField : [qField];
+  const qualStr = String(qField || '');
   if (inScope) {
     if (!isInMyRole(qualStr) && !qualStr.includes('其它')) inScope = false;
   }
-  const qField = form['申请资质'] || form['拟用资质'];
-  const quals = Array.isArray(qField) ? qField : [qField];
 
   let attachments = downloadAttachments(form, code);
   const commentFiles = extractCommentAttachments(inst);
