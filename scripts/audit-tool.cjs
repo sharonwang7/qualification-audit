@@ -108,8 +108,8 @@ const PROFILES = {
     chatId:   'oc_e8198717e2b926d97fb9007171aef2af',
     chatB:    process.env.QUAL_CARD_B_CHAT     || 'oc_e8198717e2b926d97fb9007171aef2af',  // 测试：B 也发测试群
     identity: 'ou_dc58e9efc5ed5cf4c73d48249d7f8e70',
-    auditDir: 'D:\\agent-hub\\_test\\audit_reports',
-    pending:  'D:\\agent-hub\\_test\\pending_actions.test.json',
+    auditDir: path.join(SKILL_ROOT, '..', '_test', 'audit_reports'),
+    pending:  path.join(SKILL_ROOT, '..', '_test', 'pending_actions.test.json'),
     allowApprove: false,
     // 测试环境卡由【资质审核助手自己(zizhi)】发，不再借大公子身份（2026-07-09 修 #3 身份错配）。
     cardBotAccount: process.env.QUAL_CARD_BOT_ACCOUNT || 'zizhi',

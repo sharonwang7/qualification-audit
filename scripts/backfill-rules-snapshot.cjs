@@ -22,8 +22,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const AUDIT_DIR  = process.env.QUAL_AUDIT_DIR  || 'D:\\agent-hub\\audit_reports';
-const ATTACH_DIR = process.env.QUAL_ATTACH_DIR || 'D:\\fando-ocr-cache';
+const SKILL_ROOT = path.resolve(__dirname, '..');
+
+const AUDIT_DIR  = process.env.QUAL_AUDIT_DIR  || path.join(SKILL_ROOT, '..', 'audit_reports');
+const ATTACH_DIR = process.env.QUAL_ATTACH_DIR || path.join(SKILL_ROOT, '..', '..', 'fando-ocr-cache');
 const WRITE = process.argv.includes('--write');
 
 // 规则分量（取自 common/deterministic-rules.json 的 severity/action，2026-07-17 核对）
