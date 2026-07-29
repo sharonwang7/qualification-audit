@@ -17,7 +17,7 @@ description: 审核资质/处理待办/资质审批。自动三阶段分析飞�
 
 ```bash
 # .env
-QUAL_AUDIT_ROLE=faren     # 法人岗 — 只看法人词根（法定代表人/法人/董事/股东），含 cross-type
+QUAL_AUDIT_ROLE=faren     # 法人岗 — 全量加载（common + faren + feifaren）
 QUAL_AUDIT_ROLE=feifaren  # 非法人岗 — 只加载 common + feifaren
 # 不设 = 全量
 ```
@@ -44,7 +44,7 @@ QUAL_AUDIT_ROLE=feifaren  # 非法人岗 — 只加载 common + feifaren
 ### 岗位如何影响审核流程
 
 1. **`list`**：`isInMyRole()` 在 `lib/scope-filter.js` 自动按角色过滤
-2. **`case`**：faren 看法人场景（`common/` + `faren/`），feifaren 只读 `common/` + `feifaren/`
+2. **`case`**：faren 读全量场景（`common/` + `faren/` + `feifaren/`），feifaren 只读 `common/` + `feifaren/`
 3. **spawn 子代理**：`QUAL_AUDIT_ROLE` 透传，子代理据此决定加载范围
 4. **CODEOWNERS**：`common/` 双方 approve 才能改，`faren/` faren 团队改，`feifaren/` feifaren 团队改
 
@@ -107,7 +107,7 @@ cd <技能包根目录>
 
 🔴 **JSON 铁律**：result JSON 的 `fullAnalysis` 和其他字符串值内【严禁裸双引号 `"`】——中文引号必须用 `「」` 替代 `"..."`，英文引号用单引号。write-result 用 Python 的 `json.loads()` 解析，一个裸双引号就直接拒绝。落盘前必须跑 `python -c "import json; json.load(open('result_xxx.json'))"` 自检。
 
-**你的岗位**：环境变量 `QUAL_AUDIT_ROLE`。`faren` = 法人岗（法定代表人/法人/董事/股东，含 cross-type）；`feifaren` = 非法人岗（品牌授权书/商标类，纯非法人）；未设置 = 全量。
+**你的岗位**：环境变量 `QUAL_AUDIT_ROLE`。`faren` = 全量（common + faren + feifaren），cross-type 案件归你审；`feifaren` = 只加载 common + feifaren，只有纯非法人资质；未设置 = 全量。
 
 ⏱️ **一遍过【铁律·省时间】**：拿到 case 数据 + child-judge 判据后，【一次性】做完三阶段并落盘——中途【不要再读别的文件、不要再跑别的脚本、不要反复轮询】。你的判断力没问题，别把时间耗在"找资料/等脚本/翻页定位"这些导航动作上（这是历史上超时的真凶）。
 
