@@ -184,7 +184,47 @@ const USER_OPEN_ID = (() => {
   }
   return CFG.identity;
 })();
-const ATTACH_DIR = process.env.QUAL_ATTACH_DIR || path.join(SKILL_ROOT, '..', 'fando-ocr-cache');
+// ── 附件缓存目录自动检测/创建（v3.2.0）──
+// 优先级：QUAL_ATTACH_DIR > D:\fando-ocr-cache > 自动创建 > C:\\Users\\<me>\\AppData\\Local\\Temp\\fando-ocr-cache
+function _resolveAttachDir() {
+  const explicit = process.env.QUAL_ATTACH_DIR;
+  if (explicit) {
+    _ensureDir(explicit);
+    return explicit;
+  }
+  // 优先尝试 D:\fando-ocr-cache
+  const preferred = 'D:\\fando-ocr-cache';
+  if (_ensureDir(preferred)) {
+    _writeEnvKey('QUAL_ATTACH_DIR', preferred);
+    return preferred;
+  }
+  // D 盘无权限，fallback 到用户临时目录
+  const os = require('os');
+  const fallback = path.join(os.tmpdir(), 'fando-ocr-cache');
+  _ensureDir(fallback);
+  _writeEnvKey('QUAL_ATTACH_DIR', fallback);
+  console.warn('[qual-audit] ⚠️ D:\\fando-ocr-cache 无权限创建，已自动创建于：' + fallback + '（已写入 .env）');
+  return fallback;
+}
+function _ensureDir(dir) {
+  try { fs.mkdirSync(dir, { recursive: true }); return fs.existsSync(dir); } catch (e) { return false; }
+}
+function _writeEnvKey(key, val) {
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    let lines = [];
+    if (fs.existsSync(envPath)) lines = fs.readFileSync(envPath, 'utf8').split('\n');
+    const re = new RegExp('^' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=', 'i');
+    const existing = lines.findIndex(l => re.test(l.trim()));
+    if (existing >= 0) {
+      lines[existing] = key + '=' + val;
+    } else {
+      lines.push(key + '=' + val);
+    }
+    fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+  } catch (e) { /* .env 无写权限不影响主流程 */ }
+}
+const ATTACH_DIR = _resolveAttachDir();
 const CWD = process.cwd();
 const PREVIEW_CHARS = 240;
 const READ_DEFAULT_MAX = 4000;
@@ -2339,6 +2379,58 @@ function cmdAwaitBatch(timeoutArg) {
   }
 }
 
+// ── setup（v3.2.0）：探测 QUAL_DEFINITION_CODE —— 调用飞书 API 列出所有审批定义，用户认领后写入 .env ──
+async function cmdSetup() {
+  const { listApprovalDefinitions } = require('../lib/connector-feishu.js');
+  const result = listApprovalDefinitions(50);
+  const items = (result.data && result.data.items) || [];
+  if (!items.length) {
+    return { ok: false, error: '未找到任何审批定义，请确认 lark-cli 已授权且应用已创建审批流程。' };
+  }
+  // 返回清单供 AI 渲染给用户点选
+  const choices = items.map((item, i) => ({
+    index: i + 1,
+    name: item.approval_name || '（无名）',
+    code: item.approval_code || '',
+    groupName: item.group_name || '',
+    createTime: item.create_time ? new Date(item.create_time * 1000).toLocaleString('zh-CN') : '未知',
+    nodeCount: item.nodes ? item.nodes.length : '?',
+  }));
+  return {
+    ok: true,
+    setup_type: 'QUAL_DEFINITION_CODE',
+    count: choices.length,
+    choices,
+    note: '请把上方清单告诉用户，让用户认领哪个是【资质申请】审批流。然后调用：setup-set <序号> 或 setup-set-code <definition_code>',
+  };
+}
+
+// setup-set（v3.2.0）：用户认领后写入 .env
+function cmdSetupSet(codeOrIndex) {
+  const code = String(codeOrIndex).trim();
+  // 如果是数字，当作序号查找
+  const { listApprovalDefinitions } = require('../lib/connector-feishu.js');
+  const result = listApprovalDefinitions(50);
+  const items = (result.data && result.data.items) || [];
+  if (/^\d+$/.test(code) && items.length > 0) {
+    const idx = parseInt(code, 10) - 1;
+    if (idx < 0 || idx >= items.length) {
+      return { ok: false, error: `序号 ${code} 超出范围（1~${items.length}）` };
+    }
+    const chosen = items[idx];
+    const finalCode = chosen.approval_code || chosen.uuid || chosen.definition_code || '';
+    if (!finalCode) {
+      return { ok: false, error: `该审批（第${code}条）无法获取 definition_code，请选另一条或手动提供。` };
+    }
+    _writeEnvKey('QUAL_DEFINITION_CODE', finalCode);
+    return { ok: true, action: 'setup-set', definition_code: finalCode, name: chosen.name, note: `已将 QUAL_DEFINITION_CODE=${finalCode} 写入 .env（审批名：${chosen.name}）` };
+  }
+  // 直接是 code
+  if (!code) return { ok: false, error: '需要提供 definition_code 或序号' };
+  _writeEnvKey('QUAL_DEFINITION_CODE', code);
+  return { ok: true, action: 'setup-set', definition_code: code, note: `已将 QUAL_DEFINITION_CODE=${code} 写入 .env` };
+}
+
 // ── batch-skip（2026-07-09，#1/#2）：子代理判定 in_scope=false/should_skip 时调此登记 skip，让 await-batch 不空等、gen-card 硬闸放行。──
 //   用法: batch-skip <instance_code>
 function cmdBatchSkip(code) {
@@ -2444,6 +2536,8 @@ function cmdSafetyNetSpec(remaining) {
   else if (sub === 'safety-net-spec') result = cmdSafetyNetSpec(a1);
   else if (sub === 'register-orphans') result = cmdRegisterOrphans();
   else if (sub === 'scope-dismiss') result = cmdScopeDismiss(a1);
+  else if (sub === 'setup') result = await cmdSetup();
+  else if (sub === 'setup-set') result = cmdSetupSet(a1);
   else if (sub === 'lookup-case-by-n') result = cmdLookupCaseByN(a1);
   else if (sub === 'revisions') result = cmdRevisions(a1);
   else if (sub === 'revision-card') result = cmdRevisionCard(a1, a2);
