@@ -42,7 +42,7 @@ const { runDeterministicChecks, loadEntities } = require('../lib/deterministic-c
 const { checkNamedPersonRank } = require('../lib/named-person-rank.js');
 const { checkPhoneRoster, normPhone: normRosterPhone } = require('../lib/phone-roster-check.js');
 const { checkTrademarkAuth, normRegNo: normTmRegNo } = require('../lib/trademark-auth-check.js');
-const { isInScope, isInMyRole, MY_AUDIT_QUALS } = require('../lib/scope-filter.js');
+const { isInScope, isInMyRole, isMyWorklistRole, MY_AUDIT_QUALS } = require('../lib/scope-filter.js');
 const { hasAIComment, writeComment, extractCommentAttachments } = require('../lib/comment-manager.js');
 const { withLock, atomicWriteFileSync } = require('../lib/file-lock.js');
 // L1 飞书接入连接器（P0 收拢）：本文件所有 lark-cli 传输统一委托到此模块
@@ -142,6 +142,28 @@ catch (e) { console.error('[qual-audit] QUAL_DELEGATES 解析失败，忽略：'
 // 启动自检：当前 profile 打到 stderr（不污染 stdout 的 JSON 输出），便于确认没跑错环境。
 const _ver = checkSkillVersion();
 console.error(`[qual-audit] PROFILE=${QUAL_PROFILE} ${_ver.tag} @ ${_ver.hash} [${_ver.status}] chat=${CFG.chatId} auditDir=${CFG.auditDir} allowApprove=${CFG.allowApprove}`);
+
+// ── P0-2 数据路径 fail-loud（2026-07-29）──
+// #5 事故：prod 下 .env 未显式设 QUAL_AUDIT_DIR/QUAL_PENDING_ACTIONS 时，代码 fallback=SKILL_ROOT/..，
+//   异机安装后指向错位置 → 静默在错处建空库 → 审核序号从 #1 重开、生产历史看不见。
+// 治本：prod 下【未显式设 且 fallback 位置无历史数据】→ 报错停机，逼在 .env 显式配置，绝不静默在错位置建库。
+//   （显式设了、或 fallback 处已有历史数据 → 放行，不打扰现有正常环境。）
+(function assertDataPathConfigured() {
+  if (QUAL_PROFILE !== 'prod') return;  // test 用隔离 _test 路径，不在此约束
+  const explicit = !!process.env.QUAL_AUDIT_DIR && !!process.env.QUAL_PENDING_ACTIONS;
+  if (explicit) return;
+  let hasData = false;
+  try {
+    hasData = fs.existsSync(CFG.pending) ||
+      (fs.existsSync(CFG.auditDir) && fs.readdirSync(CFG.auditDir).some(f => /^\d{8}\.json$/.test(f)));
+  } catch (e) {}
+  if (!hasData) {
+    console.error(`[qual-audit] 🔴 数据路径未显式配置：QUAL_AUDIT_DIR/QUAL_PENDING_ACTIONS 未在 .env 设置，` +
+      `fallback 位置(${CFG.auditDir})也无历史审核数据。为防在错位置静默建空库（审核序号从 #1 重开，见 #5 事故），` +
+      `已停机。请在 .env 显式设置 QUAL_AUDIT_DIR 与 QUAL_PENDING_ACTIONS 指向生产数据目录后重试。`);
+    process.exit(2);
+  }
+})();
 
 const APP_ID = process.env.FEISHU_APP_ID || 'cli_9cb844403dbb9108';
 const DEFINITION_CODE = process.env.QUAL_DEFINITION_CODE || '0E0BBB7F-A4C8-471F-8051-3E4E88A83856';
@@ -762,9 +784,9 @@ function cmdList(limit, sinceDays) {
   for (const t of candidateTasks) {
     const entry = pa[t.instance_code];
     if (!entry) {
-      // 角色过滤：新件只看本岗位管辖的（各管各的）；「其它」类留到 case 里判
+      // 角色过滤：新件只看本岗位管辖的（各管各的）；「其它」类留到 case 里判。唯一收口 isMyWorklistRole（见 scope-filter.js）。
       const qualStr = summaryVal(t.summaries, '申请资质') || '';
-      if (!isInMyRole(qualStr) && !qualStr.includes('其它')) continue;
+      if (!isMyWorklistRole(qualStr)) continue;
       worklist.push({ ...t, pa_state: 'new' });
     } else if (entry.state === 'PENDING_REVIEW') {
       // 已审核待批复 → gen-card 直读 JSON，不需要重新 spawn 子代理
@@ -915,7 +937,8 @@ async function cmdCase(code, opt) {
   const quals = Array.isArray(qField) ? qField : [qField];
   const qualStr = String(qField || '');
   if (inScope) {
-    if (!isInMyRole(qualStr) && !qualStr.includes('其它')) inScope = false;
+    // 唯一收口 isMyWorklistRole（与 cmdList 同一函数）：非本岗位且非「其它」→ 本岗位不审，降 out-of-scope。
+    if (!isMyWorklistRole(qualStr)) inScope = false;
   }
 
   let attachments = downloadAttachments(form, code);
