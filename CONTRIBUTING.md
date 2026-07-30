@@ -56,7 +56,12 @@ node golden_tests/runner.cjs               # 必须 🟢 全绿(exit 0)
 # 闸 3：判断逻辑黄金（GS 例，真判断不回归）
 node scripts/run_golden_e2e.cjs <GS...>
 
-# 三闸都绿 → 提交
+# 闸 4（改动 gen-card / 卡片时必跑）：卡片「活消息」集成测——真发真更新（2026-07-30）
+#        补离线测的盲区：smoke/golden 不发真飞书消息、测不到 POST-vs-PATCH。本测真发测试群两次，
+#        断言第二次 PATCH 同一张（治「existingMsgId=null → 永远新发、卡不刷新」那类回归）。
+node scripts/card-live-test.cjs            # 需 test profile 发卡凭证；无凭证判 SKIP 不判 FAIL
+
+# 都绿 → 提交
 git add -A && git commit -m "..."
 git tag vX.Y.Z
 git push origin master --tags     # + push 到 GitHub 远程

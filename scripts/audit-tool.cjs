@@ -1398,9 +1398,17 @@ function cmdWriteResult(instanceCode, resultFile) {
   };
   {
     const _openId = (_caseData && _caseData.applicant_open_id) || '';
-    let _person = _pick(['申请人', '申请人全称']);
-    if (!_person && _openId) _person = resolveUserName(_openId);
-    if (!_person) _person = _openId ? ('申请人(' + _openId.slice(-6) + ')') : '⚠️申请人缺失';
+    const _subPerson = String(result.person || '').trim();   // 子代理原填（它可能经别的途径拿到真名，如「闵伊馨」）
+    let _person = _pick(['申请人', '申请人全称']);            // ① 表单权威值
+    if (!_person && _openId) _person = resolveUserName(_openId);   // ② 代码反查（缺 contact scope / 跨 app open_id 时会失败）
+    // ③ A1-fix（2026-07-30）：代码查不到时【保留子代理填的真名】，不再用占位串盖掉。
+    //   之前 A1 无条件覆盖 → 把子代理填对的「闵伊馨」换成「申请人(xxxxxx)」占位（王爷实测的名字回归）。
+    //   仅在子代理给的是真名（非 open_id / 非占位 / 非纯十六进制）时采用；它也没真名才落占位。
+    if (!_person && _subPerson && !/^ou_/i.test(_subPerson) &&
+        !/申请人\(|表单未填写|未填写|缺失|^[0-9a-f]{6,}$/.test(_subPerson)) {
+      _person = _subPerson;
+    }
+    if (!_person) _person = _openId ? ('申请人(' + _openId.slice(-6) + ')') : '⚠️申请人缺失';  // ④ 兜底占位
     result.person   = _person;
     result.sealType = _pick(['申请资质', '拟用资质'], /资质$/) || '⚠️资质类型缺失';
     result.entity   = _pick(['公司主体', '公司', '主体'], /主体/) || '⚠️主体缺失';
@@ -2091,8 +2099,10 @@ function cmdGenCard(round, date, remaining) {
     //   注：key 仍稳定（不含 roundTag 也不含调用序号）→ 同轮多次调用仍 PATCH 同一张，绝不复发"一轮多张空卡"（那 bug 的根因是【每次调用】新卡，非缺 roundTag）。
     // 多卡键（2026-07-28 链式卡改造）：含 roundTag → 不同轮次不同键 → 各自新建一张独立卡，不再 PATCH 同一张。
     const key = readBatchDate() + '_r' + r + '_' + chatId + botTag + (keySuffix || '');
-    // 不幂等 PATCH：每轮新卡（原有 QUAL_CARD_NEW=1 保留兼容）
-    const existingMsgId = null;
+    // 2026-07-30 修：从 cardIds 读回本键已发卡的 message_id → 同批/同轮再跑 gen-card 走 PATCH 原地更新。
+    //   原硬编码 null 导致【永远 POST 新卡、从不更新】→ R 修订/重审后卡不刷新、停在旧判断（zizhi 实测 #83 半旧卡的真因，updated=false 坐实）。
+    //   key 仍含 roundTag：跨轮=新卡(链式卡不变)、同轮重跑=PATCH 同一张。QUAL_CARD_NEW=1 强制另起新卡（兼容）。
+    const existingMsgId = (process.env.QUAL_CARD_NEW === '1') ? null : (cardIds[key] || null);
     const psArgs = ['-File', script];
     if (r > 1) { psArgs.push('-Round'); psArgs.push(String(r)); }
     if (date) { psArgs.push('-Date'); psArgs.push(date); }
