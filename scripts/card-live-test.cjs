@@ -21,7 +21,7 @@ const TODAY = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMM
 // test profile 数据目录（与 audit-tool PROFILE 配置一致）
 const TEST_DIR = path.join(ROOT, '..', '_test');           // skills/_test（audit-tool prod fallback 同级的 _test）
 const auditDir = path.join(TEST_DIR, 'audit_reports');
-const CARDIDS = path.join(ROOT, 'scratch', 'audit_card_ids.json'); // gen-card 记 message_id 处（CWD=ROOT）
+const CARDIDS = path.join(auditDir, 'audit_card_ids.json'); // gen-card 记 message_id 处（2026-07-30 起随 AUDIT_DIR）
 const TESTCHAT = 'oc_e8198717e2b926d97fb9007171aef2af';    // test profile 发卡群
 const CODE = 'CARDLIVETEST01';
 

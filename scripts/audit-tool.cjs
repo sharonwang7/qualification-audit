@@ -1191,8 +1191,21 @@ function cmdReadAttachment(code, idxStr, maxStr) {
 // ── comment：写评论(编码/限流由工具处理) ──
 async function cmdComment(code, file) {
   if (!code || !file) throw new Error('comment 需要 <instance_code> <comment_textfile> 两个参数');
+  // 2026-07-30（王爷定·FAIR 收口）：禁止用独立 comment 应答 FAIR。
+  //   事故：zizhi 用 comment 把用户 R#85(修订) 当普通评论写进评论区 → 既没走 fair 确定性解析(R 被当 note)、又没 @申请人。
+  //   凡 case 仍在 pending_actions（未 CLOSED）→ 对它的回应属 FAIR 动作，【必须】走 `fair "<用户整条原文>"`（工具确定性解析 F/A/I/R）。
+  //   逃生口：确需对待办件发非-FAIR 普通评论时设 QUAL_ALLOW_RAW_COMMENT=1。
+  if (process.env.QUAL_ALLOW_RAW_COMMENT !== '1') {
+    let _pa; try { _pa = readPendingActions()[code]; } catch (e) {}
+    if (_pa && _pa.state && _pa.state !== 'CLOSED') {
+      throw new Error(`comment 拒绝：#${_pa.n || ''} 仍在待办(${_pa.state})，对它的回应属 FAIR 动作，必须走 \`fair "<用户整条原文>"\`（工具确定性解析 F/A/I/R，杜绝把 R 修订误当 note/评论、且自动 @申请人）。禁止用独立 comment 应答 FAIR。若确为非-FAIR 普通评论：设 QUAL_ALLOW_RAW_COMMENT=1。`);
+    }
+  }
   const text = fs.readFileSync(file, 'utf8');
-  const r = await writeComment(code, text, USER_OPEN_ID);
+  // @申请人（2026-07-30）：与 note/approve/reject 一致，评论必带 @ 申请人（拿得到就带，fail-open）。
+  let atUser;
+  try { const { c } = requireCase(code); if (c && c.applicant_open_id) atUser = { open_id: c.applicant_open_id, name: c.person }; } catch (e) {}
+  const r = await writeComment(code, text, USER_OPEN_ID, atUser);
   return { ok: r === true, result: r };
 }
 
@@ -1450,6 +1463,25 @@ function cmdWriteResult(instanceCode, resultFile) {
     const _hasQ2 = /Q2/.test(_fa);
     if (_missBoards.length > 0 || !_hasQ1 || !_hasQ2) {
       throw new Error(`write-result 拒绝（WR_G5）：阶段二·逻辑穿透必须四板块各自独立成条【看流向 / 看用途 / 业务必要性 / 主体必要性】，且「业务必要性」须单独成板块并同时写明 Q1 触发条件 与 Q2 强制必要性。当前${_missBoards.length ? '缺板块['+_missBoards.join('、')+']' : '四板块齐'}、${_hasQ1 ? 'Q1有' : '缺Q1'}、${_hasQ2 ? 'Q2有' : '缺Q2'}。禁止把业务必要性并入流向/用途或省略 Q2，请补齐结构后重新提交（判断结论不必改，只补分析结构）。`);
+    }
+    // ── WR_G6：合同/授权书【期限识别】硬闸（2026-07-30 王爷定）──
+    //   凡涉及合同/授权书的件，fullAnalysis 必须识别期限（起止日期/有效期）；授权书还须给出「是否在合同期限内」的比对结论。
+    //   背景：期限识别原只在 child-judge 文字规则(D4/C02/R15)、无硬闸 → LLM 有时审有时不审（王爷实测不稳定）。
+    {
+      const _seal = String(result.sealType || '');
+      const _blob = JSON.stringify(_caseData.attachments || []) + JSON.stringify(_form);
+      const _hasContract = /合同|协议/.test(_blob);
+      const _isAuth      = /授权书/.test(_seal) || /授权书/.test(_blob);
+      if (_hasContract || _isAuth) {
+        const _hasDate = /(\d{4}\s*[-/.年]\s*\d{1,2})|有效期|起止|截止|到期|长期有效|开放式期限/.test(_fa);
+        const _hasCompare = !_isAuth || /合同期限|期限内|期限范围|覆盖.*合同|超出合同|开放式期限/.test(_fa);
+        if (!_hasDate || !_hasCompare) {
+          throw new Error('write-result 拒绝（WR_G6）：本件涉及合同/授权书，fullAnalysis 必须识别【期限】——'
+            + (!_hasDate ? '缺具体起止日期/有效期；' : '')
+            + (!_hasCompare ? '授权书缺「是否在合同期限内」的比对结论（若开放式期限须点明风险）；' : '')
+            + '请补充合同起止时间 + 授权书期限是否落在合同期限内后重新提交。');
+        }
+      }
     }
   }
     // ── Q4 事实一致性硬闸（2026-07-24）：verdict 与 deterministic/ocr_gate 矛盾即拒 ──
@@ -2051,7 +2083,18 @@ function cmdGenCard(round, date, remaining) {
   }
   
   // Q1a: 支持 update 模式——同一批报告只发一次卡，后续用 patch 更新
-  const cardIdsPath = path.join(CWD, 'scratch', 'audit_card_ids.json');
+  // 2026-07-30（王爷定·治多卡）：从 CWD/scratch 移到【profile 数据目录 AUDIT_DIR】（随 QUAL_AUDIT_DIR、和 pending_actions 同级）。
+  //   原 CWD 相对 → 不同运行 CWD 不同就读/写到不同副本 → 找不到上一张卡 → 每次新发 → AI审核群累积多张。
+  //   放数据目录后所有运行共享同一份、patch 可靠；且随各人自配的 QUAL_AUDIT_DIR 走 → 可复用、不写死绝对路径。
+  const cardIdsPath = path.join(AUDIT_DIR, 'audit_card_ids.json');
+  // 一次性迁移：新位置没有、旧 CWD/scratch 有 → 拷过来，避免切换当次丢 message_id 追踪而重复发卡。
+  try {
+    if (!fs.existsSync(cardIdsPath)) {
+      const _oldCi = path.join(CWD, 'scratch', 'audit_card_ids.json');
+      fs.mkdirSync(path.dirname(cardIdsPath), { recursive: true });
+      if (fs.existsSync(_oldCi)) fs.copyFileSync(_oldCi, cardIdsPath);
+    }
+  } catch (e) { console.error('[qual-audit] card_ids 迁移失败(非致命): ' + e.message); }
   // Q5（2026-07-24）：cardIds 读写加 withLock，防 safety-net cron 与父 agent 同时 gen-card 的竞态。
   //   竞态场景：进程A读 cardIds={key:msg1} → 进程B读 cardIds={key:msg1} → 进程A写 cardIds={key:msg2} → 进程B写 cardIds={key:msg1}（覆盖A的更新）。
   //   修：每次读/写 cardIds 都在 withLock 内，保证读-改-写原子性。
