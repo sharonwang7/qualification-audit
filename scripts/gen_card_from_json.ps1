@@ -85,6 +85,12 @@ $pa = $null
 if (Test-Path $paPath) {
     try { $pa = [System.IO.File]::ReadAllText($paPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json } catch {}
 }
+# fail-loud（2026-07-30 王爷定）：prod 下 pending 读不到($pa=null) → 下面的过滤会【全放行】把已 CLOSED 件也上卡。
+#   宁可拒发也绝不发一张【未按 CLOSED 过滤】的卡（直堵"pa=null→全放行"这个洞）。
+if ($env:QUAL_PROFILE -eq 'prod' -and $null -eq $pa) {
+    Write-Error "gen-card 拒发：QUAL_PROFILE=prod 但 pending_actions 读取为空/失败（paPath=$paPath）→ 无法按 CLOSED/everClosed 过滤，会把已审结件误上卡。请确认 QUAL_PENDING_ACTIONS 指向正确的生产 pending 后重跑。"
+    exit 1
+}
 
 # ── ⑥ 跨批次聚合：从 pa 收集所有应出卡状态（PENDING_REVIEW / APPLICANT_REPLIED）的批次日期 ──
 # 解决"7/3 分析、7/4 发卡只读今天"的问题；多批次均有待处理案件时全量合并。
@@ -154,7 +160,8 @@ $cases = @($allCases | Where-Object {
     $code = $_.instanceCode
     if ($pa -and $pa.$code) {
         $state = $pa.$code.state
-        if ($state -eq 'CLOSED' -or $state -eq 'AWAITING_APPLICANT') { return $false }
+        # everClosed 持久闸（2026-07-30）：审核过的件永不再上卡，即使 state 被漂移回 open。
+        if ($state -eq 'CLOSED' -or $state -eq 'AWAITING_APPLICANT' -or $pa.$code.everClosed -eq $true) { return $false }
     }
     return $true
 })
@@ -180,7 +187,7 @@ if ($cases.Count -eq 0 -and $pa) {
             if (-not (Test-Path $p2)) { continue }
             try { $raw2 = [System.IO.File]::ReadAllText($p2, [System.Text.Encoding]::UTF8) | ConvertFrom-Json; foreach ($c2 in @($raw2)) { if ($c2.instanceCode -and -not $seen2.ContainsKey($c2.instanceCode)) { $seen2[$c2.instanceCode] = $true; $allCases2 += $c2 } } } catch {}
         }
-        $cases = @($allCases2 | Where-Object { $code = $_.instanceCode; if ($pa -and $pa.$code) { $st = $pa.$code.state; if ($st -eq 'CLOSED' -or $st -eq 'AWAITING_APPLICANT') { return $false } }; return $true })
+        $cases = @($allCases2 | Where-Object { $code = $_.instanceCode; if ($pa -and $pa.$code) { $st = $pa.$code.state; if ($st -eq 'CLOSED' -or $st -eq 'AWAITING_APPLICANT' -or $pa.$code.everClosed -eq $true) { return $false } }; return $true })
         if ($Category) { $cases = @($cases | Where-Object { (categorizeSeal $_.sealType $_.category) -eq $Category }) }
         Write-Host "空卡防抖：重读后 cases=$($cases.Count)"
         if ($cases.Count -eq 0) {

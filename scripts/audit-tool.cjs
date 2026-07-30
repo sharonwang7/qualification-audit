@@ -577,6 +577,10 @@ function writePendingActions(data) {
   atomicWriteFileSync(PENDING_ACTIONS_PATH, JSON.stringify(data, null, 2));
 }
 function setPAState(instanceCode, updates) {
+  // everClosed 持久闸（2026-07-30 王爷定）：一旦 CLOSED 就永久打标 everClosed=true。
+  //   list/gen-card 见此标一律跳过——抗「已 CLOSED 却被状态漂移/回退回 open 又闪回卡」（#82/#84 事故的根治兜底）。
+  //   只有【R# 修订】会显式清除 everClosed（用户主动要重审），其它任何状态变化都不清。
+  if (updates && updates.state === 'CLOSED') updates = { ...updates, everClosed: true };
   withLock(PENDING_ACTIONS_PATH, () => {
     const pa = readPendingActions();         // 持锁后重读最新，杜绝丢写
     if (pa[instanceCode]) {
@@ -760,6 +764,7 @@ function cmdList(limit, sinceDays) {
         for (const code of drifted) {
           if (fresh[code] && openStates.has(fresh[code].state)) {
             fresh[code].state = 'CLOSED';
+            fresh[code].everClosed = true;   // everClosed 持久闸
             fresh[code].reconciledAt = new Date().toISOString();
             fresh[code].reconciledNote = '飞书已离开待办，list 对账自动置 CLOSED（疑似 FAIR 执行时漏记账）';
             reconciledClosed++;
@@ -767,7 +772,7 @@ function cmdList(limit, sinceDays) {
         }
         if (reconciledClosed > 0) writePendingActions(fresh);
       });
-      for (const code of drifted) { if (pa[code]) pa[code].state = 'CLOSED'; } // 同步内存供后续过滤
+      for (const code of drifted) { if (pa[code]) { pa[code].state = 'CLOSED'; pa[code].everClosed = true; } } // 同步内存供后续过滤
     }
 
     // ── 对账洞修复（2026-07-06）：仍在待办集、但审批节点已过、只剩「是否领取」等下游节点(collectOnly) 的开放件 → 也置 CLOSED。──
@@ -792,6 +797,7 @@ function cmdList(limit, sinceDays) {
         for (const code of collectDrifted) {
           if (fresh[code] && openStates.has(fresh[code].state)) {
             fresh[code].state = 'CLOSED';
+            fresh[code].everClosed = true;   // everClosed 持久闸
             fresh[code].reconciledAt = new Date().toISOString();
             fresh[code].reconciledNote = '审批节点已过、仅剩领取等下游节点，list 对账自动置 CLOSED（非审核 bot 的活）';
             reconciledClosed++;
@@ -799,7 +805,7 @@ function cmdList(limit, sinceDays) {
         }
         writePendingActions(fresh);
       });
-      for (const code of collectDrifted) { if (pa[code]) pa[code].state = 'CLOSED'; } // 同步内存供后续过滤
+      for (const code of collectDrifted) { if (pa[code]) { pa[code].state = 'CLOSED'; pa[code].everClosed = true; } } // 同步内存供后续过滤
     }
   }
 
@@ -841,6 +847,11 @@ function cmdList(limit, sinceDays) {
   const worklist = [];
   for (const t of candidateTasks) {
     const entry = pa[t.instance_code];
+    if (entry && entry.everClosed) {
+      // everClosed 持久闸（2026-07-30）：审核过的件永不再入工作清单——即使当前 state 被漂移回 open，也绝不重审/重上卡。
+      //   只有用户 R# 修订会显式清 everClosed（见 cmdFair revise 分支）。
+      continue;
+    }
     if (!entry) {
       // 角色过滤：新件只看本岗位管辖的（各管各的）；「其它」类留到 case 里判。唯一收口 isMyWorklistRole（见 scope-filter.js）。
       const qualStr = summaryVal(t.summaries, '申请资质') || '';
@@ -1958,7 +1969,8 @@ async function cmdFair(rawText) {
       } else if (t.letter === 'R') {
         // R=修订（phase2，2026-07-25）：确定性记录用户修订原因（case 会挂成显眼复审闸 + 回传 revise_reason），
         //   并入 revise_needed —— 调用方【立即】对该件 spawn 子代理重审 → gen-card 出修订卡，不等下轮 list（修回退化回归）。
-        setPAState(code, { state: 'APPLICANT_REPLIED', reviseReason: t.reason || '', reviseAt: new Date().toISOString() });
+        // everClosed:false —— R# 修订是用户主动要重审，显式清除持久闸（唯一清除点）。
+        setPAState(code, { state: 'APPLICANT_REPLIED', reviseReason: t.reason || '', reviseAt: new Date().toISOString(), everClosed: false });
         reviseNeeded.push({ n: t.n, instance_code: code, task_id: lk.task_id || null, person: lk.person, reviseReason: t.reason || '' });
         results.push({ token: tag, person: lk.person, action: 'revise-needed', ok: true, reviseReason: t.reason || '', note: '已记录修订原因；请【立即】对该件 spawn 子代理重审出修订卡（见 revise_needed），勿等下轮 list。' });
         anyAction = true;
@@ -2332,6 +2344,7 @@ function cmdScopeDismiss(codeOrN) {
     }
     const prev = pa[code].state;
     pa[code].state = 'CLOSED';
+    pa[code].everClosed = true;   // everClosed 持久闸
     pa[code].dismissedAt = new Date().toISOString();
     pa[code].dismissNote = '用户确认越界，内部关闭（未通知申请人）';
     writePendingActions(pa);
