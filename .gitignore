@@ -1,3 +1,6 @@
+# 本机私有配置（含身份/机器路径/群ID，绝不进库——每人各自从 .env.example 复制）
+.env
+
 # 临时文件 / 缓存
 *_watermark*.txt
 *_fair_reason_*.txt
