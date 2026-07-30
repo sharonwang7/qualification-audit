@@ -1,0 +1,11 @@
+{
+  "__meta": { "nextN": 99 },
+  "test_golden_001": {
+    "n": 72,
+    "person": "张欣怡",
+    "date": "20260727",
+    "verdict": "通过",
+    "state": "PENDING_REVIEW",
+    "since": "2026-07-27T13:00:00.000Z"
+  }
+}

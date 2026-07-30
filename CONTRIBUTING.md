@@ -41,23 +41,30 @@ QUAL_PENDING_ACTIONS=<你的 pending_actions.json 绝对路径>
 
 ## 三、发版流程（棘轮：改 → 测 → commit → tag → push）
 
-**任何改动，发 tag 前必须过两道测试闸：**
+**任何改动，发 tag 前必须过三道测试闸（全部随包分发在 `scripts/` 和 `golden_tests/`，clone 即可跑，不同人一致）：**
 
 ```bash
 # 闸 1：真实运行时冒烟（P0-1，2026-07-29）——真起子进程跑核心链路，
 #        抓 mock/静态测不到的运行时崩溃（加载顺序/未定义变量/编码/路径/角色分拣）
-node scripts/smoke.cjs            # 必须 🟢 全绿(exit 0)，否则不许发版
+node scripts/smoke.cjs                     # 必须 🟢 全绿(exit 0)
 
-# 闸 2：黄金回归——判断逻辑基线不回归
-node scripts/run_golden_e2e.cjs <GS...>   # 或团队的 golden runner
+# 闸 2：结构+守卫+一致性回归（T1-T5，mock/静态，秒级）——
+#        T1 fair 守卫链 / T2 gen-card+spawn 模板 / T3 全流程剧本 / T4 目录结构+路径引用 /
+#        T5 判据一致性（index↔场景 principal_rules 字面一致，硬闸；schema 异构做可见性报告）
+node golden_tests/runner.cjs               # 必须 🟢 全绿(exit 0)
 
-# 两闸都绿 → 提交
+# 闸 3：判断逻辑黄金（GS 例，真判断不回归）
+node scripts/run_golden_e2e.cjs <GS...>
+
+# 三闸都绿 → 提交
 git add -A && git commit -m "..."
 git tag vX.Y.Z
 git push origin master --tags     # + push 到 GitHub 远程
 ```
 
-> **为什么加冒烟闸**：v3.0 迁移时"一致性/对抗/回归审查都做了、评 9.5/10"，但仍出 8 个问题——因为那些审查全是**静态的**（黄金测试是 require-mock、T4 是静态 grep、对抗审查子代理还超时挂了），测不到"在真实安装位置、真起进程时的运行时行为"，而 8 个问题**全是运行时/集成层**。冒烟闸专补这一层。**这是"审查过了还崩"的根治，不可跳。**
+> **为什么加冒烟闸（闸 1）**：v3.0 迁移时"一致性/对抗/回归审查都做了、评 9.5/10"，但仍出 8 个问题——因为那些审查全是**静态的**（黄金测试是 require-mock、T4 是静态 grep、对抗审查子代理还超时挂了），测不到"在真实安装位置、真起进程时的运行时行为"，而 8 个问题**全是运行时/集成层**。冒烟闸专补这一层。**这是"审查过了还崩"的根治，不可跳。**
+>
+> **为什么把 golden_tests 迁进包内（闸 2）**：迁移前 T1-T4 只在某个人的 workspace 里，clone 包的人拿不到、跑不了完整闸 → "不同人跑不一致"。2026-07-30 起 `golden_tests/` 随包分发，任何人 clone 后 `node golden_tests/runner.cjs` 都能跑同一套。
 
 **回滚**：每个稳定版打了 `vX.Y.Z-rollback` tag，`git checkout <tag>` 即回退。
 
@@ -87,3 +94,9 @@ git push origin master --tags     # + push 到 GitHub 远程
 - **子代理超时（复杂 cross-type 件）**：含多种资质 + 多附件的件，子代理规则加载多、分析链长，可能超 10 分钟被 kill、父代理无返回。
   - **数据不丢**：子代理超时前若 `write-result` 已落盘，该件在 `pending_actions` 已是 `PENDING_REVIEW`，**下一次 `list` 会当"已审待批"直接渲染、不重跑**。
   - **治本待办（先测量后定）**：统计超时件的资质数/附件数/规则加载量 → 对症选：① 复杂件更长 timeout；② faren 也走 `scoped_rules` 只读相关场景（去掉"全量加载"这个主因）；③ 子代理先落 result 再 return 的快照机制。这属 OpenClaw 编排侧，需 runtime 数据支撑，勿盲改。
+
+- **场景 JSON 规则体 schema 异构（可分工技术债，2026-07-30 T5 发现）**：各场景规则体写法不统一——① `criteria` 按规则 ID 键（bank/cooperation）；② `criteria` 按子 ID / 合并键（legal_rep `R05_1/2/3`、litigation `D1/D2` 覆盖 7 条 principal_rules）；③ 无 `criteria`、改用 `key_questions`（new_project/out_of_scope/trademark）。后果：新人无法依赖统一 schema，机械一致性校验只能钉死 `principal_rules`（T5 Check A），规则体只能做可见性报告。
+  - **ID 别名**：`B04'`(child-judge) = `B05`(bank.json)、`D1..D6`(child-judge 确定性表) = `D01..D06`(index/litigation)、`S01/S02`(out_of_scope 场景内自定义) 在 child-judge 无同名 token。**内容一致、仅 ID 写法不同**，T5-C 会列出供人工确认，非丢失。
+  - **治本待办**：定义统一场景 schema（规则体字段名、键=规则 ID、子规则命名规范）→ 逐场景归一化 → 归一后可把 T5 Check B（principal_rules ⊆ 规则体键）升为硬闸。归一化会改判据文本，**必须每步过闸 3 黄金回归**，勿盲改。
+
+- **`lib/connector-feishu.js` 有机器相关硬编码路径**：node-direct 走 `run.js` 时 `LARK_CLI_JS` 写死本机 `C:\Users\FD\...\@larksuite\cli\scripts\run.js`，换机器/换用户名会指错（有 shim 回退兜底，不致崩）。T4 B2 只查 `D:\` 硬编码、查不到这个 `C:\`。治本=从 `require.resolve` 或 `where lark-cli` 推导，属跨机复用（可复用分层）范畴。
