@@ -116,6 +116,7 @@ cd <技能包根目录>
 2. `in_scope=false`/`should_skip=true` → 先 `node scripts/audit-tool.cjs batch-skip <instance_code>` 登记，再回 `[skip] Case <申请人>: 越界/跳过（一句话理由）`。绝不 write-result。
 3. 否则按 child-judge.md 做完整三阶段判断 → 用 `write` 写 `result_<instance_code>.json`（唯一名，别用共享 `result.json`）。🔴【路径坑·zizhi Round4 实证】你的 `write` 工具可能把文件写进【你的 workspace】，而 `write-result` 默认在 skill 目录找 → 找不到。**所以 write-result 的第二个参数【必须传你刚写的文件的绝对完整路径】**（不是相对 `result_<code>.json`）：`node scripts/audit-tool.cjs write-result <instance_code> <你写的 result 文件的绝对路径>`，被打回就改完【重跑到 ok:true】。
    > verdict 字段【必须是纯中文】`通过/需补充/退回/转人工`（工具现会自动剥 emoji/空白，但你仍别加 emoji）。
+   > 🟢 result 只需填 `verdict` + `fullAnalysis`（+需补充/退回时 `applicantAction`）；`person/sealType/entity/dest/context` 由 write-result 从 case.json 权威注入、**你别填**（2026-07-30 A1）。阶段标题写法不拘，工具会统一规整。
 4. 落盘成功（write-result 返回 ok:true）【才】回一行【带状态】：`[write-result:ok] Case <申请人>: 通过/需补充/退回/转人工（资质类型，一句话理由）`。没落盘成功【别回 Case 行】，回来告诉我你卡在哪。不要回附件全文或长分析。
 ```
 

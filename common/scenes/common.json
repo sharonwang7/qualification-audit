@@ -23,12 +23,12 @@
       "pass_gate": "通过仅当四条全绿：①有外部客观证据 ②Q1+Q2都答实 ③主体必要性成立 ④无退回项。任一条存疑或未证→判需补充"
     },
     "result_schema": {
-      "required_fields": ["person","sealType","entity","dest","context","verdict","fullAnalysis"],
+      "required_fields": ["verdict","fullAnalysis"],
       "forbidden_fields": ["applicant","confidence","attachments_read","deterministic_issues_resolved"],
       "valid_verdicts": ["通过","需补充","退回","转人工"],
       "fullAnalysis_must_contain": ["阶段一","阶段二","阶段三","看流向","看用途","业务必要性","主体必要性","Q1","Q2"],
       "verdict_supplement_must_have": "applicantAction（面向申请人的待办，可照做）",
-      "do_not_fill": "rules_fired/deterministic_passed/engine_failed/rules_overridden——由write-result从case_file自动注入"
+      "do_not_fill": "person/sealType/entity/dest/context（表单事实，write-result 从 case.json 权威注入，2026-07-30 A1）+ rules_fired/deterministic_passed/engine_failed/rules_overridden——一律别填，填了会被覆盖"
     },
     "deterministic_handling": {
       "rules": [

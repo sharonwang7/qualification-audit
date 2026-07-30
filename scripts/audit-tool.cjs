@@ -216,13 +216,31 @@ function resolveUserName(openId) {
   if (!openId || !/^ou_/.test(openId)) return '';
   if (Object.prototype.hasOwnProperty.call(_userNameCache, openId)) return _userNameCache[openId];
   let name = '';
-  try {
-    const url = `https://open.feishu.cn/open-apis/contact/v3/users/${encodeURIComponent(openId)}?user_id_type=open_id&department_id_type=open_department_id`;
-    const data = larkApi('GET', url, {}, 'user');
-    name = (data && data.user && data.user.name) || '';
-  } catch (e) { name = ''; }
+  const url = `https://open.feishu.cn/open-apis/contact/v3/users/${encodeURIComponent(openId)}?user_id_type=open_id&department_id_type=open_department_id`;
+  // A2（2026-07-30）：user 查空/失败 → 回退 bot 身份再查（两种身份 contact scope 可能不同）；仍空则记 stderr 便于诊断。
+  for (const ident of ['user', 'bot']) {
+    try {
+      const data = larkApi('GET', url, {}, ident);
+      name = (data && data.user && data.user.name) || '';
+      if (name) break;
+    } catch (e) {
+      console.error(`[qual-audit] resolveUserName(${ident}) 失败 openId=${openId}: ${e.message}`);
+    }
+  }
+  if (!name) console.error(`[qual-audit] resolveUserName 两种身份都未取到姓名 openId=${openId}（疑似缺 contact scope / 外部或跨租户用户）`);
   _userNameCache[openId] = name;
   return name;
+}
+
+// ── 表单字段值归一（2026-07-30）──
+// 飞书字段常是【数组】，且【空数组 []】在 JS 里是 truthy——会骗过 `form['申请人'] || 兜底` 这类判断
+//   （DFA9FEBB 实证：申请人=[] 被当"已填"→ 反查真名从不触发→ person 一直空→ 子代理瞎填）。
+// 统一用本函数：数组→过滤空值/对象后 join；字符串→trim；空/对象→''。判"是否填了"也用它（非空字符串才算填）。
+function formVal(v, sep) {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.filter(x => x != null && typeof x !== 'object' && String(x).trim() !== '').map(x => String(x).trim()).join(sep || ' + ');
+  if (typeof v === 'object') return '';
+  return String(v).trim();
 }
 
 // ── 节点识别：审核 bot 只处理「审批/审核」节点；下游「是否领取」等节点不是它的活。──
@@ -927,7 +945,8 @@ async function cmdCase(code, opt) {
   }
   const form = parseForm(inst);
   // 申请人姓名兜底：表单「申请人」为空 → 用发起人 open_id 反查真名注入 form，下游(子代理/快速路径/卡片)一处覆盖。
-  if (!(form['申请人'] || form['申请人全称']) && applicantOpenId) {
+  // 2026-07-30：改用 formVal 判"是否真填了"——原 `form['申请人'] || ...` 遇空数组 [] 会误判已填、反查从不触发（真 bug）。
+  if (!formVal(form['申请人']) && !formVal(form['申请人全称']) && applicantOpenId) {
     const _nm = resolveUserName(applicantOpenId);
     if (_nm) form['申请人'] = _nm;
   }
@@ -1301,13 +1320,29 @@ async function cmdCommentFromDoc(code, docId, caseNum) {
 // result_json_file 含: { person, sealType, entity, dest, context, verdict, suggestion, applicantAction, fullAnalysis[, taskId, createTime] }
 // applicantAction=面向申请人的待办（需补充/退回必填），是唯一进审批评论给申请人看的自由文本；fullAnalysis 只进卡片/报告给审批人。
 // n 由工具从 pending_actions.__meta.nextN 分配（全局单调递增），忽略 agent 传入的 n
+// ── fullAnalysis 阶段标题格式固化（B2, 2026-07-30）──
+// 子代理三种写法（【阶段一…】 / ## 阶段一 / 阶段一…：）→ 统一为【独占一行的粗体 **阶段X·标题**】。
+// 格式由代码定死、不再靠子代理自觉（zizhi 实跑同一张卡三种风格）。只动阶段标题 token、不改分析正文；幂等（重审可重复跑）。
+// 只认阶段号后带标点分隔符(·.、:：)的，避免误伤正文引用（"见阶段二""阶段二必要性"这类不带分隔符→不动）。
+function normalizeFullAnalysis(fa) {
+  if (!fa) return fa;
+  let s = String(fa).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  s = s.replace(/【\s*(阶段[一二三四][^】\n]{0,30})】/g, '\n$1\n');   // 去 【】 包裹（保留换行边界，否则 】 后紧跟的正文会粘进标题）
+  s = s.replace(/#{1,4}\s*(阶段[一二三四])/g, '$1');              // 去 markdown 标题符 ##
+  s = s.replace(/[ \t]*\**\s*阶段([一二三四])[·.、:：]([^\n：:，。*]{0,20})[：:]?\**/g,
+    (m, num, title) => `\n\n**阶段${num}·${title.trim()}**\n`);   // 统一为独占一行粗体、分隔符归一为 ·
+  s = s.replace(/\n{3,}/g, '\n\n');
+  return s.trim();
+}
 function cmdWriteResult(instanceCode, resultFile) {
   if (!instanceCode || !resultFile) throw new Error('write-result 需要 <instance_code> <result_json_file>');
   const result = readJsonFile(resultFile);
   // ── Schema 硬闸（2026-07-03）：子代理 result.json 必须严格对齐 SKILL 步骤5a ──
   // 禁用 applicant（应为 person）、英文枚举（APPROVE→通过）、自创字段（confidence/attachments_read 等）
   // 2026-07-09 修脚本 bug：suggestion 在 SKILL 步骤5a 明写为【可选】(verdict=通过可留空)，此前误列必填 → 子代理漏填被无谓打回、弱模型又没重跑 write-result 而丢件(白雅姿事故)。移出必填。
-  const REQUIRED_FIELDS = ['person', 'sealType', 'entity', 'dest', 'context', 'verdict', 'fullAnalysis'];
+  // A1（2026-07-30）：person/sealType/entity/dest/context 是【表单事实】，改由 write-result 从 case.json 权威注入（见下方），
+  //   不再由子代理填——子代理只负责判断（verdict + fullAnalysis[ + applicantAction]）。故必填只留判断两项。
+  const REQUIRED_FIELDS = ['verdict', 'fullAnalysis'];
   const FORBIDDEN_FIELDS = ['applicant', 'confidence', 'attachments_read', 'deterministic_issues_resolved'];
   const VALID_VERDICTS = ['通过', '需补充', '退回', '转人工'];
   // 检查禁用字段
@@ -1354,6 +1389,24 @@ function cmdWriteResult(instanceCode, resultFile) {
     throw new Error(`write-result 拒绝：case.json 读取失败（${_cf}）：${e.message}。请重跑 case。`);
   }
   const _form = (_caseData && _caseData.form) || {};
+  // ── A1（2026-07-30）：person/sealType/entity/dest/context 从 case.json 权威注入，覆盖子代理自填 ──
+  //   （zizhi 实跑 #79 填占位串、#80 填裸 open_id——数据字段不该由 LLM 自由发挥）。字段名做多版本兜底扫描。
+  const _pick = (keys, scan) => {
+    for (const k of keys) { const v = formVal(_form[k]); if (v) return v; }
+    if (scan) { for (const k of Object.keys(_form)) { if (scan.test(k)) { const v = formVal(_form[k]); if (v) return v; } } }
+    return '';
+  };
+  {
+    const _openId = (_caseData && _caseData.applicant_open_id) || '';
+    let _person = _pick(['申请人', '申请人全称']);
+    if (!_person && _openId) _person = resolveUserName(_openId);
+    if (!_person) _person = _openId ? ('申请人(' + _openId.slice(-6) + ')') : '⚠️申请人缺失';
+    result.person   = _person;
+    result.sealType = _pick(['申请资质', '拟用资质'], /资质$/) || '⚠️资质类型缺失';
+    result.entity   = _pick(['公司主体', '公司', '主体'], /主体/) || '⚠️主体缺失';
+    result.dest     = _pick(['资质流向方全称（公司/自然人/平台）'], /流向/) || '⚠️流向缺失';
+    result.context  = _pick(['申请事由'], /事由/) || String(result.context || '');
+  }
   let _destTruth = '';
   for (const k of Object.keys(_form)) { if (k.indexOf('流向') !== -1) _destTruth += ' ' + String(_form[k] || ''); }
   _destTruth = _destTruth.trim();
@@ -1409,6 +1462,8 @@ function cmdWriteResult(instanceCode, resultFile) {
         }
       }
     }
+  // B2（2026-07-30）：阶段标题格式固化——在 WR_G4/G5（校验含"阶段一/二/三"）之后规整，不影响校验、落盘即规范。
+  result.fullAnalysis = normalizeFullAnalysis(result.fullAnalysis);
   return writeResultObj(instanceCode, result);
 }
 

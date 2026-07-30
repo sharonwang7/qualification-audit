@@ -101,11 +101,11 @@
 
 ## result JSON 字段（构造 `result_<instance_code>.json`）
 ```json
-{"n":1,"person":"申请人","sealType":"申请资质类型","entity":"公司主体","dest":"资质流向方","context":"申请事由(原文截取)","verdict":"通过/需补充/退回/转人工","suggestion":"建议(可选)","applicantAction":"面向申请人的待办(需补充/退回时必填)","fullAnalysis":"三阶段完整markdown","taskId":"list给的task_id"}
+{"verdict":"通过/需补充/退回/转人工","fullAnalysis":"三阶段完整markdown","applicantAction":"面向申请人的待办(需补充/退回时必填)","suggestion":"建议(可选)","taskId":"list给的task_id"}
 ```
-- `person/sealType/entity/dest/context/verdict/fullAnalysis` 必填；`suggestion` 可选；`applicantAction`：verdict=需补充/退回时【必填】(空/过短会被硬拒)，通过/转人工可空。
-- 🔧 **`rules_fired` / `deterministic_passed` / `engine_failed` / `rules_overridden` 由 `write-result` 从 case_file 自动注入——【你不要填，填了也会被覆盖】**（同 `n`/`applicant_open_id`）。用途：留痕「哪条红线响过、你有没有驳回它」，供事后审计。`rules_fired=null` = 快照没读到（≠ 没红线响）。
+- 你【只填】`verdict` + `fullAnalysis`（必填）+ `applicantAction`（需补充/退回必填、通过/转人工可空）+ `suggestion`（可选）。
+- 🔧 **`person/sealType/entity/dest/context` 是【表单事实】，由 `write-result` 从 case.json 权威注入——【你不要填，填了也会被覆盖】**（2026-07-30 A1：数据字段确定性化，杜绝人名/主体/流向被 LLM 填错或编造）。连同 `rules_fired` / `deterministic_passed` / `engine_failed` / `rules_overridden` / `n` / `applicant_open_id` 都由工具注入，一律别填。`rules_fired=null` = 快照没读到（≠ 没红线响）。
 - 🟢 **applicantAction 是唯一进"审批评论"给申请人看的自由文本**（fullAnalysis 只进卡片给审批人）→ 独立、干净、可直接照做，写"你要做什么"，别复述推理/内部术语。反例❌"材料不完整/见分析"；正例✅"1. 缺盖双方公章的合作合同；2. 授权书草稿未上传，请补交。"
-- `fullAnalysis` 须含【阶段一/阶段二/阶段三】结构、不短于 100 字。
+- `fullAnalysis` 须含【阶段一/阶段二/阶段三】结构、不短于 100 字。🟢 阶段标题写法不拘（`【】`/`##`/冒号都行）——write-result 会自动规整成统一的 `**阶段X·标题**`，你只管写全三阶段 + 四板块（看流向/看用途/业务必要性/主体必要性）+ Q1/Q2 的内容。
 
 > 深读（仅疑难时）：三阶段完整规格 `analysis-protocol.md`；场景原则 `scene-principles.md`；历史疑难 `failure-cases-archive.md`；商标注册号跨查 `trademark-registry-full.json`；海外主体 `overseas-entities.json`；部门负责人 `department-directors.json`。
