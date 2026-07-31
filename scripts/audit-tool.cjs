@@ -228,6 +228,15 @@ function _writeEnvKey(key, val) {
     fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
   } catch (e) { /* .env 无写权限不影响主流程 */ }
 }
+function _removeEnvKey(key) {
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    if (!fs.existsSync(envPath)) return;
+    const re = new RegExp('^\\s*' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*=');
+    const lines = fs.readFileSync(envPath, 'utf8').split('\n').filter(l => !re.test(l));
+    fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+  } catch (e) { /* 忽略 */ }
+}
 const ATTACH_DIR = _resolveAttachDir();
 const CWD = process.cwd();
 const PREVIEW_CHARS = 240;
@@ -2467,6 +2476,73 @@ function cmdSetupSet(codeOrIndex) {
   return { ok: true, action: 'setup-set', definition_code: code, note: `已将 QUAL_DEFINITION_CODE=${code} 写入 .env` };
 }
 
+// ── doctor（2026-07-31 王爷定）：配置体检 + 自动修。新人/半坏配置一句话诊断修复，AI 跑它即可，不靠即兴改 .env。──
+//   用法: doctor [--fix] [--chat-id oc_xxx]  （--fix 自动修可安全修的；AI 传 --chat-id=你当前所在群的 chat_id）
+function cmdDoctor(opts) {
+  opts = opts || {};
+  const envPath = path.join(__dirname, '..', '.env');
+  const examplePath = path.join(__dirname, '..', '.env.example');
+  const fixes = []; const checks = [];
+  const add = (level, name, msg, fix) => checks.push(`${level} ${name}: ${msg}${fix ? `  → ${fix}` : ''}`);
+  const isBad = (v) => !v || /^<.*>$/.test(v) || /你的|路径|open_id|审批定义code|chat_id/.test(v);
+
+  if (!fs.existsSync(envPath)) {
+    if (opts.fix && fs.existsSync(examplePath)) { fs.copyFileSync(examplePath, envPath); fixes.push('从 .env.example 创建了 .env'); }
+    else return { ok: false, checks: ['🔴 .env: 没有 .env 文件  → doctor --fix 会从 .env.example 复制一份'], summary: '🔴 先 doctor --fix 创建 .env', next: 'doctor --fix' };
+  }
+  const envTxt = fs.readFileSync(envPath, 'utf8');
+  const getV = (k) => { const m = envTxt.match(new RegExp('^\\s*' + k + '\\s*=(.*)$', 'm')); return m ? m[1].trim() : undefined; };
+
+  // 1) 卡片脚本：占位/无效 → 删（代码自动探测）
+  const cs = getV('QUAL_CARD_SCRIPT');
+  if (cs !== undefined) {
+    const resolved = path.isAbsolute(cs) ? cs : path.join(__dirname, '..', cs);
+    if (isBad(cs) || !fs.existsSync(resolved)) {
+      if (opts.fix) { _removeEnvKey('QUAL_CARD_SCRIPT'); fixes.push('删掉无效 QUAL_CARD_SCRIPT（改代码自动探测）'); add('✅', 'QUAL_CARD_SCRIPT', '已删无效值，自动探测 scripts/gen_card_from_json.ps1'); }
+      else add('⚠️', 'QUAL_CARD_SCRIPT', `无效/占位（${cs}）`, 'doctor --fix 会删掉、改自动探测');
+    } else add('✅', 'QUAL_CARD_SCRIPT', '有效');
+  } else add('✅', 'QUAL_CARD_SCRIPT', '未设=自动探测(OK)');
+
+  // 2) 发卡群
+  const chat = getV('LARK_AUDIT_CHAT_ID');
+  if (isBad(chat)) {
+    if (opts.fix && opts.chatId) { _writeEnvKey('LARK_AUDIT_CHAT_ID', opts.chatId); fixes.push(`LARK_AUDIT_CHAT_ID 设为当前群 ${opts.chatId}`); add('✅', 'LARK_AUDIT_CHAT_ID', `已设为 ${opts.chatId}`); }
+    else add('🔴', 'LARK_AUDIT_CHAT_ID', '未配发卡群', 'doctor --fix --chat-id <你当前这个群的chat_id>（AI 传你所在群 chat_id）');
+  } else add('✅', 'LARK_AUDIT_CHAT_ID', chat);
+
+  // 3) 角色
+  const role = getV('QUAL_AUDIT_ROLE');
+  if (!role) add('ℹ️', 'QUAL_AUDIT_ROLE', '未设 → 首跑 list 会弹卡片选 faren/feifaren');
+  else add('✅', 'QUAL_AUDIT_ROLE', role + (role === 'faren' ? '(法人岗)' : role === 'feifaren' ? '(非法人岗)' : ''));
+
+  // 4) 环境
+  const prof = process.env.QUAL_PROFILE || getV('QUAL_PROFILE') || 'test';
+  add('ℹ️', 'QUAL_PROFILE', prof === 'prod' ? '🔴 正式环境(可真审批·真发群，谨慎)' : '🧪 测试环境(默认·不会真审批·卡仍发你配的群·台账隔离)');
+
+  // 5) 数据目录 / 附件
+  for (const [k, label] of [['QUAL_AUDIT_DIR', '报告目录'], ['QUAL_PENDING_ACTIONS', '状态文件'], ['QUAL_ATTACH_DIR', '附件缓存']]) {
+    const v = getV(k); if (isBad(v)) add('⚠️', k, `${label}未配(用默认路径)`); else add('✅', k, v);
+  }
+  // 6) 飞书凭证
+  for (const [k, label] of [['FEISHU_APP_ID', '应用ID'], ['QUAL_DEFINITION_CODE', '审批定义'], ['FEISHU_USER_OPEN_ID', '审批人']]) {
+    const v = getV(k);
+    if (isBad(v)) add('🔴', k, `${label}未配${k === 'QUAL_DEFINITION_CODE' ? '（跑 setup 认领审批流）' : ''}`);
+    else add('✅', k, k === 'FEISHU_USER_OPEN_ID' ? v : '(已配)');
+  }
+  // 7) gen_card 脚本文件
+  const gc = path.join(__dirname, 'gen_card_from_json.ps1');
+  add(fs.existsSync(gc) ? '✅' : '🔴', 'gen_card_from_json.ps1', fs.existsSync(gc) ? '在位' : '缺失(技能包不完整，重新 pull)');
+
+  const badCount = checks.filter(c => c.startsWith('🔴')).length;
+  return {
+    ok: badCount === 0,
+    fixed: fixes,
+    checks,
+    summary: badCount === 0 ? '✅ 配置齐全，可以跑 list 了' : `🔴 还有 ${badCount} 项要配（见上 🔴）`,
+    next: badCount === 0 ? '跑 list 开始审核（首次未设角色会先弹卡片选岗）' : '按 🔴 项补配：多数可 `doctor --fix --chat-id <当前群>` 自动修；审批定义跑 `setup` 认领。修完重跑 doctor 复检。',
+  };
+}
+
 // ── batch-skip（2026-07-09，#1/#2）：子代理判定 in_scope=false/should_skip 时调此登记 skip，让 await-batch 不空等、gen-card 硬闸放行。──
 //   用法: batch-skip <instance_code>
 function cmdBatchSkip(code) {
@@ -2544,6 +2620,9 @@ function cmdSafetyNetSpec(remaining) {
   // 先抽出 --fair-letter <X>（可在任意位置），剥离后再做位置参数解析，避免污染 a1..a3。
   let fairLetter = '';
   { const fi = args.indexOf('--fair-letter'); if (fi >= 0) { fairLetter = args[fi + 1] || ''; args.splice(fi, 2); } }
+  // doctor 选项（任意位置）：--fix 自动修；--chat-id <oc_xxx> 由 AI 传入当前所在群
+  let doctorFix = false; { const xi = args.indexOf('--fix'); if (xi >= 0) { doctorFix = true; args.splice(xi, 1); } }
+  let doctorChatId = ''; { const ci = args.indexOf('--chat-id'); if (ci >= 0) { doctorChatId = args[ci + 1] || ''; args.splice(ci, 2); } }
   const [sub, a1, a2, a3] = args;
   let result;
   if (sub === 'list') {
@@ -2574,6 +2653,7 @@ function cmdSafetyNetSpec(remaining) {
   else if (sub === 'scope-dismiss') result = cmdScopeDismiss(a1);
   else if (sub === 'setup') result = await cmdSetup();
   else if (sub === 'setup-set') result = cmdSetupSet(a1);
+  else if (sub === 'doctor') result = cmdDoctor({ fix: doctorFix, chatId: doctorChatId });
   else if (sub === 'lookup-case-by-n') result = cmdLookupCaseByN(a1);
   else if (sub === 'revisions') result = cmdRevisions(a1);
   else if (sub === 'revision-card') result = cmdRevisionCard(a1, a2);

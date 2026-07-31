@@ -1,12 +1,18 @@
 # 安装指南
 
-## 🤖 小白模式（推荐：一句话安装）
+## 🤖 小白模式（推荐：全程跟 AI 说人话，不碰 GitHub）
 
-你不需要懂 GitHub、不需要装任何命令行工具。直接跟你的 AI 助手说：
+你不需要懂 GitHub、不需要命令行。**四句话上手**：
 
-> **「帮我安装资质审核技能包」**
+1. **「帮我安装/更新资质审核技能包」** → AI 下载最新版、建好数据目录。
+2. **「帮我检查并修复资质审核配置」** → AI 跑 `doctor` 自动修：删无效的卡片路径、把发卡群设成【你当前这个群】、告诉你现在是什么环境。缺飞书凭证时 AI 会带你补。
+3. **「跑 list」** → 首次会弹卡片让你【选岗位：法人岗 / 非法人岗】，选完自动按你岗位过滤（法人岗审法人/董事/股东类；非法人岗审品牌授权书/商标类）。
+4. **「审核」** → AI 审完出卡片【到你自己的群】，你点 F/A/I/R 确认。
 
-AI 会自动完成：下载 → 装依赖 → 探测审批定义 → 创建目录 → 验证。全程只需要你点一两次确认。
+> 🧪 **默认是测试环境**：能走完整流程、能在自己群看到卡，但点 F/A/I/R **不会真审批**（安全练手）、台账隔离。
+> 流程确认 OK 后，跟 AI 说 **「切正式环境」** 才开始真审批真执行。
+
+> 💡 装过一次但配置出过问题？**不用重装重来**——只要 ①「更新技能包」②「帮我检查并修复配置」（doctor 自动修）③「跑 list」，当场就好。
 
 ---
 
@@ -33,10 +39,12 @@ copy .env.example .env
 notepad .env
 ```
 
-需要填的：
+需要填的（或直接让 AI 跑 `node scripts/audit-tool.cjs doctor --fix --chat-id <你的群>` 自动补）：
 - `FEISHU_APP_ID`：你的飞书应用 ID
 - `FEISHU_USER_OPEN_ID`：你的审批人 open_id
-- `QUAL_AUDIT_ROLE=faren` 或 `feifaren`
+- `LARK_AUDIT_CHAT_ID`：发卡群 = **你当前这个群**的 chat_id
+- 🔴 岗位（faren/feifaren）**别在这里填**——留空，首次跑 `list` 会弹卡片让你选（填了就跳过选岗流程）。
+- `QUAL_CARD_SCRIPT` / 数据目录 / 附件目录：**不用配**，代码自动定位。
 
 ### 自动探测审批定义（新！v3.2.0）
 
@@ -57,6 +65,7 @@ node scripts/audit-tool.cjs setup-set <序号>
 ### 验证安装
 
 ```bash
+node scripts/audit-tool.cjs doctor     # 🩺 配置体检：缺啥/坏啥一目了然（加 --fix [--chat-id <群>] 自动修）
 node scripts/audit-tool.cjs --help     # 看所有命令
 node scripts/smoke.cjs                  # 运行时冒烟测试
 node golden_tests/runner.cjs            # 结构+守卫回归测试
