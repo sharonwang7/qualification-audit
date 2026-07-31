@@ -94,7 +94,7 @@ function _readActiveProfileSentinel() {
 const QUAL_PROFILE = QUAL_PROFILE_ENV || _readActiveProfileSentinel() || 'test';
 const PROFILES = {
   prod: {
-    chatId:   process.env.LARK_AUDIT_CHAT_ID   || 'oc_231fbee0b63f15721bc550e75897b818',
+    chatId:   process.env.LARK_AUDIT_CHAT_ID   || '',   // 2026-07-31（Q2）：不再硬编码默认到别的团队群(oc_231f)——没配则拒发(见 cmdGenCard 闸)，各团队各自在 .env 设自己的群
     chatB:    process.env.QUAL_CARD_B_CHAT     || 'oc_b3d2d2ec90d16d1f594a73dc56583af2',  // Card B（商标+授权）群
     identity: process.env.FEISHU_USER_OPEN_ID  || 'ou_102cae80079463e6c8281777fec96f47',
     auditDir: process.env.QUAL_AUDIT_DIR       || path.join(SKILL_ROOT, '..', 'audit_reports'),
@@ -104,7 +104,7 @@ const PROFILES = {
     cardBotAccount: process.env.QUAL_CARD_BOT_ACCOUNT || 'zizhi',  // 2026-07-24 王爷定：zizhi 独跑生产 → prod 卡也由 zizhi 发（原默认空=大公子）
     // 额外生产群（2026-07-23 王爷请求把旧群 oc_b3f3cf 也纳入）：卡在主群 chatId 之外，同时发到这些群（逗号分隔可多）。
     //   每群卡独立 key=batchDate+chatId 追踪/原地更新；FAIR 从任一群回都按 #N 处理，与群无关。
-    extraChats: (process.env.QUAL_EXTRA_PROD_CHATS || 'oc_b3f3cfa72f5bddbbb3c50009f95e10e0').split(',').map(s => s.trim()).filter(Boolean),
+    extraChats: (process.env.QUAL_EXTRA_PROD_CHATS || '').split(',').map(s => s.trim()).filter(Boolean),   // 2026-07-31（Q2）：默认空，避免新团队误发到 oc_b3f3cf；主生产在 .env 设 QUAL_EXTRA_PROD_CHATS 保留
   },
   test: {
     chatId:   'oc_e8198717e2b926d97fb9007171aef2af',
@@ -845,6 +845,7 @@ function cmdList(limit, sinceDays) {
 
   // 2b. BUILD_WL：AWAITING_APPLICANT 本轮跳过（等申请人回复中；flip 已在上方处理）
   const worklist = [];
+  let roleDropped = 0; const roleDroppedSample = [];   // Q4：记录被角色过滤掉的新件，打进输出便于诊断"feifaren 漏件"
   for (const t of candidateTasks) {
     const entry = pa[t.instance_code];
     if (entry && entry.everClosed) {
@@ -854,8 +855,13 @@ function cmdList(limit, sinceDays) {
     }
     if (!entry) {
       // 角色过滤：新件只看本岗位管辖的（各管各的）；「其它」类留到 case 里判。唯一收口 isMyWorklistRole（见 scope-filter.js）。
-      const qualStr = summaryVal(t.summaries, '申请资质') || '';
-      if (!isMyWorklistRole(qualStr)) continue;
+      // Q4（2026-07-31）：读【申请资质 + 拟用资质】双字段（旧版表单资质在拟用资质，只读申请资质会漏）。
+      const qualStr = summaryVal(t.summaries, '申请资质') || summaryVal(t.summaries, '拟用资质') || '';
+      if (!isMyWorklistRole(qualStr)) {
+        roleDropped++;
+        if (roleDroppedSample.length < 8) roleDroppedSample.push((summaryVal(t.summaries, '申请人') || '?') + '·' + (qualStr || '∅'));
+        continue;
+      }
       worklist.push({ ...t, pa_state: 'new' });
     } else if (entry.state === 'PENDING_REVIEW') {
       // 已审核待批复 → gen-card 直读 JSON，不需要重新 spawn 子代理
@@ -910,7 +916,10 @@ function cmdList(limit, sinceDays) {
     batch_date: _bd,
     cleaned_closed: cleanedCount,
     reconciled_closed: reconciledClosed,
-    note: `${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}。`,
+    role_dropped: roleDropped,          // Q4：本轮被【角色过滤】掉的新件数（非本岗位管辖）
+    role_dropped_sample: roleDroppedSample,  // 抽样（申请人·资质），便于诊断"该审的被漏"
+    role: process.env.QUAL_AUDIT_ROLE || '未设(全量)',
+    note: `${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}${(process.env.QUAL_AUDIT_ROLE && roleDropped > 0) ? `；⚠️角色[${process.env.QUAL_AUDIT_ROLE}]过滤掉 ${roleDropped} 条非本岗位件（若疑漏审，核对 role_dropped_sample 或不设角色重跑）` : ''}。`,
     tasks: selected.map(t => ({
       instance_code: t.instance_code,
       task_id: t.task_id,
@@ -2046,13 +2055,18 @@ function renumberReportByWaitTime(date) {
 }
 
 function cmdGenCard(round, date, remaining) {
+  // Q2（2026-07-31）：发卡群未配置 → 拒发，绝不误发到别的团队群（硬编码默认 oc_231f 已移除）。
+  if (!CFG.chatId) {
+    return { ok: false, error: 'gen-card 拒发：LARK_AUDIT_CHAT_ID 未配置。请让 AI 把「你当前这个群的 chat_id」写进 .env 的 LARK_AUDIT_CHAT_ID（要发到哪个群就设哪个），再重跑 gen-card。绝不默认发到别人的群。' };
+  }
   let script = process.env.QUAL_CARD_SCRIPT;
-  if (!script) {
+  // Q1（2026-07-31）：QUAL_CARD_SCRIPT 未设【或指向不存在文件】(如 .env.example 占位串被原样复制) → 自动探测。
+  if (!script || !fs.existsSync(script)) {
     // 自动探测：标准部署下 skill 在 .../skills/qualification-audit/，gen_card_from_json.ps1 在 .../scripts/
     const candidate = path.join(CWD, 'scripts', 'gen_card_from_json.ps1');
     if (fs.existsSync(candidate)) {
       script = candidate;
-      console.error(`[qual-audit] QUAL_CARD_SCRIPT 未设，自动探测到 ${candidate}`);
+      console.error(`[qual-audit] QUAL_CARD_SCRIPT 未设/无效，自动探测到 ${candidate}`);
     }
   }
   if (!script) throw new Error('QUAL_CARD_SCRIPT 环境变量未设置，也未在 ../../scripts/gen_card_from_json.ps1 找到脚本。请参考 .env.example 配置此变量。');
