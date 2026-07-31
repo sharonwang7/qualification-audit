@@ -1,0 +1,362 @@
+[
+  {
+    "name": "海外代理商核销申请",
+    "code": "F0BB2A09-2A52-43BC-995D-A78F10C49E5A",
+    "group": "海外"
+  },
+  {
+    "name": "WIS产品机制调整审批",
+    "code": "D5993568-715D-49B1-9B73-41741DC971DB",
+    "group": "营销"
+  },
+  {
+    "name": "WIS各渠道产品提需审批",
+    "code": "7EE94507-950E-414C-9AA1-7F6CCEF2AC6D",
+    "group": "营销"
+  },
+  {
+    "name": "WIS渠道费用（低于5万）",
+    "code": "EBD8C0D9-A85A-410F-8EF3-2498BB0DDEB7",
+    "group": "营销"
+  },
+  {
+    "name": "营销费用决策审批",
+    "code": "95C3E876-5459-4F2D-A53F-BD0FDAE26869",
+    "group": "营销"
+  },
+  {
+    "name": "供应部合作供应商资质申请",
+    "code": "84B82B9F-98CA-4AE0-9A5B-826B3B09E5E1",
+    "group": "供应"
+  },
+  {
+    "name": "产品返工单审批",
+    "code": "BCAEF648-2840-4646-B637-10AF633C8F3C",
+    "group": "供应"
+  },
+  {
+    "name": "旧品变更申请",
+    "code": "3FDA581D-4C9C-4860-8E7B-4B0878B46481",
+    "group": "供应"
+  },
+  {
+    "name": "B2B退货申请",
+    "code": "1E2A5196-2844-466A-AAA1-C84D6FDD94D5",
+    "group": "供应"
+  },
+  {
+    "name": "供应商淘汰审批",
+    "code": "0BC9DD37-C239-45A1-9518-AF87D6448D57",
+    "group": "供应"
+  },
+  {
+    "name": "开发中心需求",
+    "code": "5BD984B2-BB63-4A50-9F8D-16DF37AA44CA",
+    "group": "供应"
+  },
+  {
+    "name": "大模型API Key申请审批",
+    "code": "ADF02838-8CE7-479D-9251-E4A10131866E",
+    "group": "AI"
+  },
+  {
+    "name": "飞书审批创建申请",
+    "code": "279180B9-62E3-4F8A-A65D-CD3729B921E6",
+    "group": "AI"
+  },
+  {
+    "name": "AI功能开发需求审批",
+    "code": "6C83049F-4788-4801-88F8-40ED3CBD505D",
+    "group": "AI"
+  },
+  {
+    "name": "WIS线上/线下渠道活动审批",
+    "code": "4BB7762E-1D88-4E2D-985C-E2604249D51F",
+    "group": "渠道"
+  },
+  {
+    "name": "外观设计专利申请",
+    "code": "0BF9A640-9DD2-4DFE-A79C-9964A59210E2",
+    "group": "产品"
+  },
+  {
+    "name": "研究院项目收费",
+    "code": "BFA4B993-D778-4AEC-8189-4FDB5CAC34B1",
+    "group": "产品"
+  },
+  {
+    "name": "KONO产品新建货号",
+    "code": "796CFE31-0BAA-493C-8597-FF5764C61CB0",
+    "group": "产品"
+  },
+  {
+    "name": "研发原料资料变更",
+    "code": "25754BFE-1959-4DA9-9CC1-2CE41CD6BF60",
+    "group": "产品"
+  },
+  {
+    "name": "产品ODM检测审批流",
+    "code": "D05F868A-029F-4785-B004-8C4F613AF835",
+    "group": "产品"
+  },
+  {
+    "name": "质量体系文件修改",
+    "code": "9A23B660-9E14-4CD6-8719-A48B7CE4A799",
+    "group": "产品"
+  },
+  {
+    "name": "赫系产品变动审批",
+    "code": "B0853B26-995B-4511-AE10-093E6FB82FCE",
+    "group": "产品"
+  },
+  {
+    "name": "研发中试申请",
+    "code": "C9161686-A2EC-487E-B092-CD1BC1E1D775",
+    "group": "产品"
+  },
+  {
+    "name": "产品开发审批-ODM",
+    "code": "5067D444-2170-4084-BFCC-FA11E94685D3",
+    "group": "产品"
+  },
+  {
+    "name": "BOM表修改需求",
+    "code": "69480081-36A4-466C-8E3B-14A2B3B2AABC",
+    "group": "产品"
+  },
+  {
+    "name": "产品注销",
+    "code": "1518E7A5-7074-4C7D-B7CC-3219C55F80F5",
+    "group": "产品"
+  },
+  {
+    "name": "条码申请（条码申请工作统一在下午16:30左右完成申请，请勿催促，感谢合作）",
+    "code": "0834F8B3-70C5-44CC-9E93-CDFC9E3737D7",
+    "group": "产品"
+  },
+  {
+    "name": "详情页审批",
+    "code": "B43D9635-AC66-48CC-A4AA-D4632A2482B1",
+    "group": "产品"
+  },
+  {
+    "name": "新品备案",
+    "code": "39A71B52-9FA2-45C5-81B0-1F935AF0B977",
+    "group": "产品"
+  },
+  {
+    "name": "检测需求",
+    "code": "7DE2D98F-AA16-411B-87FF-50C47BF1F20E",
+    "group": "产品"
+  },
+  {
+    "name": "产品备案变更",
+    "code": "69644440-9E75-43B9-BD84-5B2B230EF261",
+    "group": "产品"
+  },
+  {
+    "name": "商标注册申请",
+    "code": "93540978-8A4F-4BF7-BBFA-9D89EFA1EDB3",
+    "group": "法务"
+  },
+  {
+    "name": "诉讼申请",
+    "code": "D8000CE8-377F-4286-9C7C-B307ADD6E1C2",
+    "group": "法务"
+  },
+  {
+    "name": "打假用章",
+    "code": "30141748-C756-435F-9D0C-DAC75D8ED3F5",
+    "group": "法务"
+  },
+  {
+    "name": "法务需求",
+    "code": "9D0DD8AD-4F19-44DE-86CC-5576525A299F",
+    "group": "法务"
+  },
+  {
+    "name": "供应商资质预审及合同审查",
+    "code": "8572880C-3E3C-4B0B-87ED-A4872DD73842",
+    "group": "法务"
+  },
+  {
+    "name": "飞书排班制考勤组变动申请",
+    "code": "B5481CD9-CFD2-4A56-8B26-65A164542C11",
+    "group": "考勤"
+  },
+  {
+    "name": "调休单据",
+    "code": "D39C16EF-C12C-4B16-B4C2-535BB2CE8B81",
+    "group": "考勤"
+  },
+  {
+    "name": "外勤打卡申请",
+    "code": "3DD7C53F-57B3-4261-84B5-743E733A55C7",
+    "group": "考勤"
+  },
+  {
+    "name": "离职",
+    "code": "D7D8F725-F69E-41F7-A71D-8ADFED2C6E23",
+    "group": "人事"
+  },
+  {
+    "name": "延迟转正申请",
+    "code": "57A8ACC5-E99D-4A54-84E3-89C2D24B53A8",
+    "group": "人事"
+  },
+  {
+    "name": "岛民档案更新",
+    "code": "8E6D9FAF-BA24-4FB0-A643-ACC4C7D289AD",
+    "group": "人事"
+  },
+  {
+    "name": "制度、条例、工作流程审批",
+    "code": "B45C5AF9-9BD2-43F6-B925-7970C4A05C44",
+    "group": "人事"
+  },
+  {
+    "name": "月度定计划文档",
+    "code": "C2B05C3C-A2DF-49CA-988D-CB2CCE33B4D0",
+    "group": "人事"
+  },
+  {
+    "name": "人事类证明开具申请",
+    "code": "3389AC46-B963-46C6-98F2-FD92392A28FF",
+    "group": "人事"
+  },
+  {
+    "name": "HRM系统权限申请",
+    "code": "3BC1D9A2-8C1F-4045-BEF8-2C83822A6E31",
+    "group": "人事"
+  },
+  {
+    "name": "调岗申请",
+    "code": "E27DF181-9917-4178-AAC3-C71094006AC7",
+    "group": "人事"
+  },
+  {
+    "name": "更换工资账号",
+    "code": "319BEA6A-5212-4750-9766-A7145A1E6501",
+    "group": "人事"
+  },
+  {
+    "name": "转正申请",
+    "code": "EAB203E6-6460-49A5-B164-03C3E44BB416",
+    "group": "人事"
+  },
+  {
+    "name": "管理层茶歇申请审批",
+    "code": "A73490BB-DB5A-4FF0-94AF-D2D6C204C488",
+    "group": "行政"
+  },
+  {
+    "name": "物品领用 - AI机器人专属",
+    "code": "AF5CD6CF-267A-4F70-9B3A-C87B6E2624CD",
+    "group": "行政"
+  },
+  {
+    "name": "内宣渠道上线申请",
+    "code": "22FFD79A-00AC-417C-9709-BC1E57A91BBA",
+    "group": "行政"
+  },
+  {
+    "name": "账号采买",
+    "code": "D1DE1645-85FA-4EAA-8477-1B76B5557CAE",
+    "group": "行政"
+  },
+  {
+    "name": "固定资产报废申请",
+    "code": "26E3F601-ED49-4B90-A410-3C1025E8927B",
+    "group": "行政"
+  },
+  {
+    "name": "固定资产转移申请",
+    "code": "66E8084E-3009-44F9-B6F4-44B3D0084C4B",
+    "group": "行政"
+  },
+  {
+    "name": "东塔访客申请",
+    "code": "026E943B-21CD-43B7-A560-D92E39638887",
+    "group": "行政"
+  },
+  {
+    "name": "桌面故障问题",
+    "code": "F914C58F-0F0D-47F6-A2C9-572FECC42DD5",
+    "group": "行政"
+  },
+  {
+    "name": "东塔仓库使用审批",
+    "code": "EA129F94-36C4-4403-96AE-20A0B8E16EE7",
+    "group": "行政"
+  },
+  {
+    "name": "资质申请",
+    "code": "0E0BBB7F-A4C8-471F-8051-3E4E88A83856",
+    "group": "行政"
+  },
+  {
+    "name": "用车申请",
+    "code": "DD7D6492-AA64-4B63-AD57-69CA890DE430",
+    "group": "行政"
+  },
+  {
+    "name": "东塔货梯使用申请",
+    "code": "D17EBC62-1A1F-4733-9DCD-B972ED711E56",
+    "group": "行政"
+  },
+  {
+    "name": "坏账审批",
+    "code": "4C7E556F-1871-46EF-B1DD-C48B7B14CFBE",
+    "group": "财务"
+  },
+  {
+    "name": "非营销决策审批",
+    "code": "0CA27C7F-5BE8-4D45-8735-E5EC637A3627",
+    "group": "财务"
+  },
+  {
+    "name": "打击假货采购&竞品采购 报销申请审批",
+    "code": "3051FF3F-ADF2-45F9-9173-DD600C54AC96",
+    "group": "财务"
+  },
+  {
+    "name": "财务数据向外传输申请",
+    "code": "CD918AA7-EBB0-4A50-B828-D8B2BF71E4DA",
+    "group": "财务"
+  },
+  {
+    "name": "团建审批创建申请",
+    "code": "695D727D-D2F2-493E-8F1B-F9B1759BBEB6",
+    "group": "财务"
+  },
+  {
+    "name": "财报店铺变动需求申请",
+    "code": "7587F447-E837-4EBA-AD8A-CE391FD1FDF9",
+    "group": "财务"
+  },
+  {
+    "name": "KONO新机制提报审批",
+    "code": "4D3CE595-055B-4A9C-A33D-3AE1B247EA7B",
+    "group": "KONO"
+  },
+  {
+    "name": "KONO渠道项目开发提需",
+    "code": "0981293C-02C2-47FD-BA17-37F6B327573F",
+    "group": "KONO"
+  },
+  {
+    "name": "订阅号发送申请",
+    "code": "8670A5E8-1C39-49D8-984B-9128601CA63F",
+    "group": "其他服务商提供"
+  },
+  {
+    "name": "携程商旅出差申请",
+    "code": "6B45CF4B-C058-4477-87E1-D2ED56F6C08D",
+    "group": "其他服务商提供"
+  },
+  {
+    "name": "补卡",
+    "code": "849F6A10-7516-41C4-A7AD-9E723111D5DC",
+    "group": "其他服务商提供"
+  }
+]

@@ -171,6 +171,11 @@ console.error(`[qual-audit] PROFILE=${QUAL_PROFILE} ${_ver.tag} @ ${_ver.hash} [
 
 const APP_ID = process.env.FEISHU_APP_ID || 'cli_9cb844403dbb9108';
 const DEFINITION_CODE = process.env.QUAL_DEFINITION_CODE || '0E0BBB7F-A4C8-471F-8051-3E4E88A83856';
+// ③ fail-loud（2026-08-01）：FEISHU_APP_ID 被填成占位串/非法值 → 审批卡「查看审批」跳转链接会【静默】打不开(它没有拒发闸)。
+//   启动时 warn 到 stderr（不阻断 list）。凡岛团队留默认 cli_9cb844403dbb9108 即可，别在 .env 填 <你的飞书应用ID> 这类占位符。
+if (!/^cli_[a-z0-9]+$/i.test(APP_ID)) {
+  console.error(`[qual-audit] ⚠️ FEISHU_APP_ID=「${APP_ID}」不像合法飞书应用ID(应 cli_ 开头)——审批卡的「查看审批」链接会打不开。凡岛团队用默认 cli_9cb844403dbb9108 即可。`);
+}
 // 写/查评论用的 user_id：必须是【当前调用 --as bot 所用 app 的用户】，否则 99992361 cross app。
 //   大公子桥(cli_aaa274)：王伊瑄=ou_102cae；OpenClaw/zizhi(独立 app)：王伊瑄=ou_dc58e9（飞书 open_id 按 app 隔离，同一人不同 app 不同 id）。
 // 2026-07-25（王爷要求·各环境默认用自己身份）：prod 下不再靠固定 .env 值（两环境 .env 同步、都写死 ou_102cae → zizhi 跑必 cross app），
@@ -701,6 +706,31 @@ function applyDateWindow(tasks, sinceDays) {
   return { tasks: kept, scanned, droppedCollect };
 }
 
+// ── 飞书 API 错误翻译（2026-08-01 · 异常3）──
+// list 翻页调飞书 API，若未登录/scope 不足/token 过期/网络故障 → 原来 throw 出原始 JSON、进程 crash，AI 和用户都看不懂。
+// 统一 catch 后翻译成人话 + hint，返回 {ok:false} 不 crash。合并了「异常2 未登录预检」——未登录同样在这里被抓、翻译，
+// 不必每次 list 都多跑一次 lark auth status 子进程（省一次开销，同样兜底）。
+function translateLarkError(err) {
+  const s = String((err && (err.stack || err.message)) || (typeof err === 'object' ? JSON.stringify(err) : err) || '');
+  let hint;
+  // 最优先：审批定义 code 配错。飞书对错 code 返回 {message:"definition code not found"}（实测），非空数组。
+  //   这就是「异常1（code 配错）」在有 API 错误时的真实形态 → 精确翻译成「帮你重选审批流」，别落到通用兜底。
+  if (/definition.*code.*not found|definition.*not found|invalid.*definition|审批定义.*(不存在|未找到|无效)/i.test(s)) {
+    hint = '当前 QUAL_DEFINITION_CODE 在飞书查不到(definition code not found)——大概率配错/拼写差一位/换错了审批流。让我帮你重选审批流(setup)，或核对 .env 的 QUAL_DEFINITION_CODE。';
+  } else if (/not.*(login|logged|bound)|未登录|no.*credential|unauthor/i.test(s)) {
+    hint = 'lark-cli 尚未登录飞书。请先执行 lark-cli auth login 完成登录，再跑 list。';
+  } else if (/99991663|99991661|token.*(expired|invalid)|access.?token/i.test(s)) {
+    hint = '飞书登录/token 已过期或失效。请重新执行 lark-cli auth login 登录后重跑 list。';
+  } else if (/99991679|99991672|missing.*scope|permission|forbidden|denied|无权限|权限不足/i.test(s)) {
+    hint = '飞书返回权限不足/scope 缺失。请确认 lark-cli 已授权、且应用有 approval:task 等 scope。';
+  } else if (/ENOTFOUND|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|network|socket/i.test(s)) {
+    hint = '网络连不上飞书。检查网络/代理后重跑 list。';
+  } else {
+    hint = '飞书 API 调用失败。若持续，请把下方 raw 发给维护者排查。';
+  }
+  return { ok: false, error: '拉取待办失败：' + hint, hint, raw: s.slice(0, 600) };
+}
+
 function cmdList(limit, sinceDays) {
   // ⑥ 写批次日期文件（code-level 传递，不走 LLM prompt 链）
   const _bd = (() => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`; })();
@@ -730,17 +760,38 @@ function cmdList(limit, sinceDays) {
   let tasks = [];
   let pageToken = null;
   let pages = 0;
-  do {
-    const params = { topic: '1', page_size: '100', definition_code: DEFINITION_CODE };
-    if (pageToken) params.page_token = pageToken;
-    const res = lark('approval tasks query', params);
-    const batch = (res && res.data && res.data.tasks) || [];
-    tasks.push(...batch);
-    pageToken = (res && res.data && res.data.has_more) ? (res.data.page_token || null) : null;
-    pages++;
-  } while (pageToken && pages < 20); // 安全上限 20 页(2000 条)，防异常死循环
+  // 异常3（2026-08-01）：整段翻页包 try/catch + 逐页查错码。未登录/scope/token/网络故障 → 翻译成人话返回，
+  //   不再 throw 原始 JSON 让进程 crash、也不静默当「0 条」骗用户以为没活。
+  try {
+    do {
+      const params = { topic: '1', page_size: '100', definition_code: DEFINITION_CODE };
+      if (pageToken) params.page_token = pageToken;
+      const res = lark('approval tasks query', params);
+      // 飞书返回错误码(非 code:0)/error/ok:false → 立即翻译返回（正常成功 res 为 {data:{tasks,...}} 不命中）
+      if (res && (res.error || (res.code != null && res.code !== 0) || res.ok === false)) {
+        return translateLarkError(res.error || res);
+      }
+      const batch = (res && res.data && res.data.tasks) || [];
+      tasks.push(...batch);
+      pageToken = (res && res.data && res.data.has_more) ? (res.data.page_token || null) : null;
+      pages++;
+    } while (pageToken && pages < 20); // 安全上限 20 页(2000 条)，防异常死循环
+  } catch (e) {
+    return translateLarkError(e);
+  }
   tasks.sort((a, b) => String(b.task_id).localeCompare(String(a.task_id)));
   const totalPending = tasks.length;
+
+  // 异常1（2026-08-01）：拉到 0 条 且 当前 DEFINITION_CODE 不在公司审批流清单 → 大概率 code 配错(拼写差一位/换错流)，
+  //   而非真没待办。飞书对错 code 只返回空数组、不报错 → 不判就静默 0 条、用户以为没活。仅在 0 条时校验，避免误报。
+  let defCodeWarning = '';
+  if (totalPending === 0) {
+    try {
+      const _defs = require('../common/approval-definitions.json');
+      const _hit = _defs.some(d => String(d.code || '').toUpperCase() === String(DEFINITION_CODE).toUpperCase());
+      if (!_hit) defCodeWarning = `⚠️ 当前 QUAL_DEFINITION_CODE=${DEFINITION_CODE} 不在公司审批流清单(${_defs.length}条)——大概率配错/拼写差一位，所以拉到 0 条(而非真没待办)。让我帮你重选审批流(setup)，或核对 .env 的 QUAL_DEFINITION_CODE。`;
+    } catch (e) { /* 清单缺失不阻断，静默 */ }
+  }
 
   const pa = readPendingActions();
   // 清理 30 天前的 CLOSED 条目（持锁重读再删，避免覆盖并发写入的新条目）
@@ -937,7 +988,8 @@ function cmdList(limit, sinceDays) {
       ? '🔴 正式环境：可做真实审批·真发群，谨慎。'
       : `🧪 测试环境（默认）：能出卡到 ${CFG.chatId} 群、能走完流程，但【点 F/A/I/R 不会真审批】、台账隔离。流程 OK 后让我帮你切正式(prod)。`,
     chat_id: CFG.chatId,                // 当前发卡群，供 AI 核对/告知
-    note: `${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}${(process.env.QUAL_AUDIT_ROLE && roleDropped > 0) ? `；⚠️角色[${process.env.QUAL_AUDIT_ROLE}]过滤掉 ${roleDropped} 条非本岗位件（若疑漏审，核对 role_dropped_sample 或不设角色重跑）` : ''}。`,
+    definition_code_warning: defCodeWarning || null,  // 异常1：code 不在公司审批流清单时的诊断（否则 null）
+    note: `${defCodeWarning ? defCodeWarning + ' ' : ''}${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}${(process.env.QUAL_AUDIT_ROLE && roleDropped > 0) ? `；⚠️角色[${process.env.QUAL_AUDIT_ROLE}]过滤掉 ${roleDropped} 条非本岗位件（若疑漏审，核对 role_dropped_sample 或不设角色重跑）` : ''}。`,
     tasks: selected.map(t => ({
       instance_code: t.instance_code,
       task_id: t.task_id,
@@ -2427,10 +2479,10 @@ function cmdAwaitBatch(timeoutArg) {
 // ── setup（v3.2.0）：探测 QUAL_DEFINITION_CODE —— 调用飞书 API 列出所有审批定义，用户认领后写入 .env ──
 async function cmdSetup() {
   const { listApprovalDefinitions } = require('../lib/connector-feishu.js');
-  const result = listApprovalDefinitions(50);
+  const result = listApprovalDefinitions(0);  // 0=不截断，返回全量（从本地缓存读，零 API 调用）
   const items = (result.data && result.data.items) || [];
   if (!items.length) {
-    return { ok: false, error: '未找到任何审批定义，请确认 lark-cli 已授权且应用已创建审批流程。' };
+    return { ok: false, error: '未找到任何审批定义。请确认 common/approval-definitions.json 存在且非空。' };
   }
   // 返回清单供 AI 渲染给用户点选
   const choices = items.map((item, i) => ({
@@ -2455,7 +2507,7 @@ function cmdSetupSet(codeOrIndex) {
   const code = String(codeOrIndex).trim();
   // 如果是数字，当作序号查找
   const { listApprovalDefinitions } = require('../lib/connector-feishu.js');
-  const result = listApprovalDefinitions(50);
+  const result = listApprovalDefinitions(0);  // 0=不截断，返回全量（从本地缓存读）
   const items = (result.data && result.data.items) || [];
   if (/^\d+$/.test(code) && items.length > 0) {
     const idx = parseInt(code, 10) - 1;
@@ -2468,7 +2520,8 @@ function cmdSetupSet(codeOrIndex) {
       return { ok: false, error: `该审批（第${code}条）无法获取 definition_code，请选另一条或手动提供。` };
     }
     _writeEnvKey('QUAL_DEFINITION_CODE', finalCode);
-    return { ok: true, action: 'setup-set', definition_code: finalCode, name: chosen.name, note: `已将 QUAL_DEFINITION_CODE=${finalCode} 写入 .env（审批名：${chosen.name}）` };
+    const chosenName = chosen.approval_name || chosen.name || '(未知)';
+    return { ok: true, action: 'setup-set', definition_code: finalCode, name: chosenName, note: `已将 QUAL_DEFINITION_CODE=${finalCode} 写入 .env（审批名：${chosenName}）` };
   }
   // 直接是 code
   if (!code) return { ok: false, error: '需要提供 definition_code 或序号' };
@@ -2523,12 +2576,25 @@ function cmdDoctor(opts) {
   for (const [k, label] of [['QUAL_AUDIT_DIR', '报告目录'], ['QUAL_PENDING_ACTIONS', '状态文件'], ['QUAL_ATTACH_DIR', '附件缓存']]) {
     const v = getV(k); if (isBad(v)) add('⚠️', k, `${label}未配(用默认路径)`); else add('✅', k, v);
   }
-  // 6) 飞书凭证
-  for (const [k, label] of [['FEISHU_APP_ID', '应用ID'], ['QUAL_DEFINITION_CODE', '审批定义'], ['FEISHU_USER_OPEN_ID', '审批人']]) {
-    const v = getV(k);
-    if (isBad(v)) add('🔴', k, `${label}未配${k === 'QUAL_DEFINITION_CODE' ? '（跑 setup 认领审批流）' : ''}`);
-    else add('✅', k, k === 'FEISHU_USER_OPEN_ID' ? v : '(已配)');
+  // 6) 飞书凭证（含格式/清单校验，2026-08-01：③ app 格式 + ⑤ 审批定义在不在公司清单）
+  //   FEISHU_APP_ID：占位→🔴；非 cli_ 格式→⚠️(审批链接会打不开)；否则✅。凡岛默认 cli_9cb8 即对。
+  const appid = getV('FEISHU_APP_ID');
+  if (isBad(appid)) add('🔴', 'FEISHU_APP_ID', '应用ID未配');
+  else if (!/^cli_[a-z0-9]+$/i.test(appid)) add('⚠️', 'FEISHU_APP_ID', `值「${appid}」不像合法应用ID(应 cli_ 开头)——审批卡链接会打不开`, '凡岛团队用默认 cli_9cb844403dbb9108');
+  else add('✅', 'FEISHU_APP_ID', '(已配)');
+  //   QUAL_DEFINITION_CODE：未设=用凡岛默认(ℹ️)；占位→🔴；已设则查是否在 common/approval-definitions.json 清单内，不在→⚠️(会拉 0 条)。
+  const defcode = getV('QUAL_DEFINITION_CODE');
+  if (defcode === undefined || defcode === '') add('ℹ️', 'QUAL_DEFINITION_CODE', '未设=用默认 0E0BBB7F(凡岛「资质申请」)，无需配');
+  else if (isBad(defcode)) add('🔴', 'QUAL_DEFINITION_CODE', '审批定义占位/无效', '删掉用默认，或让 AI 帮你选(setup)');
+  else {
+    let inReg = false, regN = 0;
+    try { const _d = require('../common/approval-definitions.json'); regN = _d.length; inReg = _d.some(x => String(x.code || '').toUpperCase() === defcode.toUpperCase()); } catch (e) {}
+    if (inReg) add('✅', 'QUAL_DEFINITION_CODE', '(在公司审批流清单内)');
+    else add('⚠️', 'QUAL_DEFINITION_CODE', `值不在公司审批流清单(${regN}条)——可能配错/拼写差一位，会拉到 0 条`, '让 AI 帮你重选审批流(setup)，或核对拼写');
   }
+  const uoid = getV('FEISHU_USER_OPEN_ID');
+  if (isBad(uoid)) add('🔴', 'FEISHU_USER_OPEN_ID', '审批人未配');
+  else add('✅', 'FEISHU_USER_OPEN_ID', uoid);
   // 7) gen_card 脚本文件
   const gc = path.join(__dirname, 'gen_card_from_json.ps1');
   add(fs.existsSync(gc) ? '✅' : '🔴', 'gen_card_from_json.ps1', fs.existsSync(gc) ? '在位' : '缺失(技能包不完整，重新 pull)');
