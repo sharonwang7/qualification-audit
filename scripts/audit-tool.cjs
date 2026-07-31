@@ -2551,7 +2551,12 @@ function cmdSetEnv(key, val) {
   key = String(key || '').trim(); val = String(val || '').trim();
   if (!ALLOW.includes(key)) return { ok: false, error: `set-env 只允许写：${ALLOW.join(' / ')}。收到「${key}」` };
   if (!val) return { ok: false, error: `set-env 需要值：set-env ${key} <值>` };
-  if (key === 'QUAL_AUDIT_ROLE' && !['faren', 'feifaren'].includes(val)) return { ok: false, error: 'QUAL_AUDIT_ROLE 只能是 faren 或 feifaren' };
+  // 重新选岗（2026-07-31）：set-env QUAL_AUDIT_ROLE reset → 清掉角色，下次 list 重弹选岗卡（治"AI 安装时抢先设了角色、跳过选岗"）。
+  if (key === 'QUAL_AUDIT_ROLE' && /^(reset|clear|unset|空|重选)$/i.test(val)) {
+    _removeEnvKey('QUAL_AUDIT_ROLE');
+    return { ok: true, action: 'set-env', key, value: '(已清除)', note: '已清除岗位设置 → 重跑 list 会弹选岗卡让你重新选。' };
+  }
+  if (key === 'QUAL_AUDIT_ROLE' && !['faren', 'feifaren'].includes(val)) return { ok: false, error: 'QUAL_AUDIT_ROLE 只能是 faren 或 feifaren（或 reset 清除重选）' };
   if (key === 'QUAL_PROFILE' && !['test', 'prod'].includes(val)) return { ok: false, error: 'QUAL_PROFILE 只能是 test 或 prod' };
   _writeEnvKey(key, val);
   const note = (key === 'QUAL_PROFILE' && val === 'prod')
