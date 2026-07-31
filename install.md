@@ -6,58 +6,94 @@
 
 > **「帮我安装资质审核技能包」**
 
-AI 会自动完成：
-1. 下载技能包
-2. 安装 Node.js / lark-cli / Python 依赖
-3. 自动探测审批定义 code（你只需要在列表里点一下"资质申请"）
-4. 自动创建附件缓存目录
-5. 验证安装、跑冒烟测试
-
-全程只需要你点一两次确认。
+AI 会自动完成：下载 → 装依赖 → 探测审批定义 → 创建目录 → 验证。全程只需要你点一两次确认。
 
 ---
 
-## 🖱️ 手动下载（如果 AI 帮不了你）
+## 💻 命令行模式（如果你会用 Git）
 
-### 步骤 1：下载技能包
+### 下载（首次安装）
 
-用浏览器打开这个链接：
+打开终端（PowerShell 或 CMD），输入：
 
-👉 **https://github.com/sharonwang7/qualification-audit**
+```bash
+git clone https://github.com/sharonwang7/qualification-audit.git
+cd qualification-audit
+```
 
-页面中间有一个 **绿色的「Code」按钮**，点击它 → 选「Download ZIP」→ 文件会自动下载。
+这会把整个技能包下载到你当前目录下的 `qualification-audit` 文件夹里。
 
-![下载按钮位置](https://docs.github.com/assets/cb-20363/images/help/repository/code-button.png)
+### 配置
 
-### 步骤 2：解压文件
+```bash
+# 1. 复制环境变量模板
+copy .env.example .env
 
-找到下载的 `qualification-audit-master.zip`，右键 → 解压到当前文件夹。解压后的文件夹里有一个 `.env.example` 文件。
+# 2. 编辑 .env，填入你的飞书信息
+notepad .env
+```
 
-### 步骤 3：告诉 AI 安装
+需要填的：
+- `FEISHU_APP_ID`：你的飞书应用 ID
+- `FEISHU_USER_OPEN_ID`：你的审批人 open_id
+- `QUAL_AUDIT_ROLE=faren` 或 `feifaren`
 
-把解压后的文件夹路径发给 AI，然后说：
+### 自动探测审批定义（新！v3.2.0）
 
-> **「技能包在这里了，帮我完成安装配置」**
+不用去飞书后台复制 code，AI 帮你列清单：
 
-AI 会指引你完成剩余配置（飞书登录、审批定义认领、岗位选择）。
+```bash
+node scripts/audit-tool.cjs setup
+```
+
+从列表里找到「资质申请」的序号，然后：
+
+```bash
+node scripts/audit-tool.cjs setup-set <序号>
+```
+
+其他配置（附件目录、数据目录）启动时自动检测，**不需要手动配**。
+
+### 验证安装
+
+```bash
+node scripts/audit-tool.cjs --help     # 看所有命令
+node scripts/smoke.cjs                  # 运行时冒烟测试
+node golden_tests/runner.cjs            # 结构+守卫回归测试
+```
+
+---
+
+## 🔄 更新技能包（以后出新版本时）
+
+只需要一行命令：
+
+```bash
+git pull origin master
+```
+
+拉完后再跑一下冒烟确认没问题：
+
+```bash
+node scripts/smoke.cjs
+```
+
+---
+
+## 🖱️ 纯手动下载（不会用 Git 也装不了 AI）
+
+1. 浏览器打开 👉 **https://github.com/sharonwang7/qualification-audit**
+2. 点页面中间的 **绿色「Code」按钮** → 选 **「Download ZIP」**
+3. 解压到任意文件夹
+4. 把文件夹路径发给 AI：「技能包在 XXX 路径，帮我完成安装配置」
 
 ---
 
 ## 📋 你需要准备的东西
 
-| 需要什么 | 在哪找 | 谁帮你 |
-|----------|--------|--------|
-| 飞书账号 | 你每天用的那个 | 你自己登录 |
-| 飞书应用 ID | 问行政/IT，或者 AI 帮你查找 | AI 可以帮你查 |
-| 审批人 open_id | 问行政/IT | AI 可以帮你查 |
-| 资质审批是哪个 | AI 列出清单让你点选 | AI 自动列清单 |
-
----
-
-## 🔄 以后怎么更新
-
-当你看到群里说「技能包有新版本」，跟 AI 说：
-
-> **「帮我更新资质审核技能包」**
-
-AI 会自动下载最新版并覆盖安装。
+| 需要什么 | 在哪找 |
+|----------|--------|
+| 飞书账号 | 你每天用的那个 |
+| 飞书应用 ID | 问 IT，或让 AI 帮你查 |
+| 审批人 open_id | 问 IT，或让 AI 帮你查 |
+| Git（命令行模式需要） | https://git-scm.com/download/win |
