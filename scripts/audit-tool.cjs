@@ -107,7 +107,11 @@ const PROFILES = {
     extraChats: (process.env.QUAL_EXTRA_PROD_CHATS || '').split(',').map(s => s.trim()).filter(Boolean),   // 2026-07-31（Q2）：默认空，避免新团队误发到 oc_b3f3cf；主生产在 .env 设 QUAL_EXTRA_PROD_CHATS 保留
   },
   test: {
-    chatId:   'oc_e8198717e2b926d97fb9007171aef2af',
+    // 2026-07-31（zizhi 审出·王爷定）：test 也尊重用户配的群——否则 feifaren 团队 test 下卡片被硬发到 oc_e819(别人的测试群)。
+    //   顺序：QUAL_TEST_CHAT_ID(显式测试群) > LARK_AUDIT_CHAT_ID(你工作的群) > oc_e819(兜底)。
+    //   审批开关(allowApprove)仍只认 prod，是真正的安全闸——群路由与审批开关解耦。
+    //   ⚠️ 主生产机 .env 里 LARK_AUDIT_CHAT_ID=生产群，故【必须】设 QUAL_TEST_CHAT_ID=oc_e819 才能让 test 卡不进生产群。
+    chatId:   process.env.QUAL_TEST_CHAT_ID || process.env.LARK_AUDIT_CHAT_ID || 'oc_e8198717e2b926d97fb9007171aef2af',
     chatB:    process.env.QUAL_CARD_B_CHAT     || 'oc_e8198717e2b926d97fb9007171aef2af',  // 测试：B 也发测试群
     identity: 'ou_dc58e9efc5ed5cf4c73d48249d7f8e70',
     auditDir: path.join(SKILL_ROOT, '..', '_test', 'audit_reports'),
@@ -919,6 +923,11 @@ function cmdList(limit, sinceDays) {
     role_dropped: roleDropped,          // Q4：本轮被【角色过滤】掉的新件数（非本岗位管辖）
     role_dropped_sample: roleDroppedSample,  // 抽样（申请人·资质），便于诊断"该审的被漏"
     role: process.env.QUAL_AUDIT_ROLE || '未设(全量)',
+    profile: QUAL_PROFILE,              // Q5：当前环境，供 AI 告知用户
+    env_notice: QUAL_PROFILE === 'prod'
+      ? '🔴 正式环境：可做真实审批·真发群，谨慎。'
+      : `🧪 测试环境（默认）：能出卡到 ${CFG.chatId} 群、能走完流程，但【点 F/A/I/R 不会真审批】、台账隔离。流程 OK 后让我帮你切正式(prod)。`,
+    chat_id: CFG.chatId,                // 当前发卡群，供 AI 核对/告知
     note: `${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}${(process.env.QUAL_AUDIT_ROLE && roleDropped > 0) ? `；⚠️角色[${process.env.QUAL_AUDIT_ROLE}]过滤掉 ${roleDropped} 条非本岗位件（若疑漏审，核对 role_dropped_sample 或不设角色重跑）` : ''}。`,
     tasks: selected.map(t => ({
       instance_code: t.instance_code,
