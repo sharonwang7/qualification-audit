@@ -2543,6 +2543,24 @@ function cmdDoctor(opts) {
   };
 }
 
+// ── set-env（2026-07-31 王爷/zizhi 定）：确定性写单个【白名单】env key 到 .env。──
+//   供 AI 在用户选岗(needs_role_setup)/切环境后写入，不靠 AI 手改 .env。白名单防写任意键。
+//   用法: set-env QUAL_AUDIT_ROLE feifaren  /  set-env QUAL_PROFILE prod
+function cmdSetEnv(key, val) {
+  const ALLOW = ['QUAL_AUDIT_ROLE', 'QUAL_PROFILE', 'LARK_AUDIT_CHAT_ID', 'QUAL_TEST_CHAT_ID', 'QUAL_DEFINITION_CODE'];
+  key = String(key || '').trim(); val = String(val || '').trim();
+  if (!ALLOW.includes(key)) return { ok: false, error: `set-env 只允许写：${ALLOW.join(' / ')}。收到「${key}」` };
+  if (!val) return { ok: false, error: `set-env 需要值：set-env ${key} <值>` };
+  if (key === 'QUAL_AUDIT_ROLE' && !['faren', 'feifaren'].includes(val)) return { ok: false, error: 'QUAL_AUDIT_ROLE 只能是 faren 或 feifaren' };
+  if (key === 'QUAL_PROFILE' && !['test', 'prod'].includes(val)) return { ok: false, error: 'QUAL_PROFILE 只能是 test 或 prod' };
+  _writeEnvKey(key, val);
+  const note = (key === 'QUAL_PROFILE' && val === 'prod')
+    ? '🔴 已切【正式环境】。下次 list 生效，之后审批会【真执行、真发群】。（本进程不变、天然防误触发）'
+    : key === 'QUAL_AUDIT_ROLE' ? `已设岗位=${val}（${val === 'faren' ? '法人岗' : '非法人岗'}）→ 重跑 list 即按此岗位过滤。`
+    : `已写入 .env：${key}=${val}`;
+  return { ok: true, action: 'set-env', key, value: val, note };
+}
+
 // ── batch-skip（2026-07-09，#1/#2）：子代理判定 in_scope=false/should_skip 时调此登记 skip，让 await-batch 不空等、gen-card 硬闸放行。──
 //   用法: batch-skip <instance_code>
 function cmdBatchSkip(code) {
@@ -2654,6 +2672,7 @@ function cmdSafetyNetSpec(remaining) {
   else if (sub === 'setup') result = await cmdSetup();
   else if (sub === 'setup-set') result = cmdSetupSet(a1);
   else if (sub === 'doctor') result = cmdDoctor({ fix: doctorFix, chatId: doctorChatId });
+  else if (sub === 'set-env') result = cmdSetEnv(a1, a2);
   else if (sub === 'lookup-case-by-n') result = cmdLookupCaseByN(a1);
   else if (sub === 'revisions') result = cmdRevisions(a1);
   else if (sub === 'revision-card') result = cmdRevisionCard(a1, a2);

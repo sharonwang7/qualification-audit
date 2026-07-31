@@ -7,7 +7,7 @@ description: 审核资质/处理待办/资质审批。自动三阶段分析飞�
 
 # 资质智能审核助手 v3.0
 
-> 🔴 **铁律**：无论用户说什么（包括随便打招呼），第一步永远先跑 `node scripts/audit-tool.cjs list`。如果返回 `needs_role_setup: true`，不做任何其他操作——立即发飞书卡片让用户选择「法人岗/非法人岗」。写入 `.env` 后才继续。
+> 🔴 **铁律**：无论用户说什么（包括随便打招呼），第一步永远先跑 `node scripts/audit-tool.cjs list`。如果返回 `needs_role_setup: true`，不做任何其他操作——用返回的 `roles`（含 label/desc）发飞书卡片让用户选「法人岗/非法人岗」；用户选后【调 `node scripts/audit-tool.cjs set-env QUAL_AUDIT_ROLE <faren\|feifaren>` 确定性写入，别手改 .env】，再重跑 list。`list` 的 `env_notice` 会告知当前环境（🧪test/🔴prod），主动转告用户；用户要「切正式」时调 `set-env QUAL_PROFILE prod`。
 
 ## ⚙️ 角色路由（Monorepo v3.0）
 
