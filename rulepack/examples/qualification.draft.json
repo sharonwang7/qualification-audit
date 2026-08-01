@@ -1,0 +1,137 @@
+{
+  "_demo_note": "规则包工厂 DEMO 产出：AI 从资质现有 child-judge.md + common/scenes/*.json + index.json 提炼的五件套草稿(代表性切片,非全量)。忠于原文,不确定项挂 open_questions。status=draft,人确认黄/红档后定稿。",
+
+  "pack_meta": {
+    "$schema_version": "1.0",
+    "pack_id": "qualification",
+    "pack_name": "资质审核规则包",
+    "domain": "legal.qualification",
+    "version": "0.1.0-draft",
+    "status": "draft",
+    "source_refs": [
+      {"type": "doc", "ref": "common/child-judge.md", "note": "三阶段判断框架+被证明≠被说明"},
+      {"type": "doc", "ref": "common/scenes/*.json + index.json", "note": "sealType/流向方/事由→场景规则集(B/C/D/L/P/N/R/S 系列判据)"}
+    ],
+    "generated_by": "rulepack-factory/prompt-chain@1.0",
+    "updated": "2026-08-01"
+  },
+
+  "fields": [
+    {"id": "fld_quals", "name": "申请资质", "type": "enum",
+     "source": {"channel": "oa_form", "locator": "申请资质"},
+     "aliases": ["拟用资质"], "required": true, "nullable": true,
+     "extract_hint": "sealType；'申请资质'与'拟用资质'为新旧表单同义,已归一"},
+    {"id": "fld_dest", "name": "资质流向方", "type": "string",
+     "source": {"channel": "oa_form", "locator": "资质流向方"}, "nullable": true,
+     "extract_hint": "决定场景路由(银行/法院/平台…)"},
+    {"id": "fld_reason", "name": "申请事由", "type": "string",
+     "source": {"channel": "oa_form", "locator": "申请事由"}, "required": true},
+    {"id": "fld_involve_account", "name": "是否涉及相关账号", "type": "enum",
+     "source": {"channel": "oa_form", "locator": "是否涉及相关账号"}, "nullable": true,
+     "extract_hint": "≠'无' 触发账号超管/实名人职级校验(R13/R14)"},
+    {"id": "fld_applicant", "name": "申请人", "type": "string",
+     "source": {"channel": "oa_form", "locator": "申请人"}, "nullable": true,
+     "aliases": ["申请人全称"], "extract_hint": "表单空则用发起人 open_id 反查真名"}
+  ],
+
+  "rules": [
+    {"id": "rule_b05_institution_backed", "subject": "机构标准业务(银行/政务)由机构规程背书", "effect": "gate",
+     "datasource_a": {"field_ref": ["fld_dest", "fld_reason"]}, "operator": "in_set",
+     "datasource_b": {"knowledge_ref": "kb_institution_business"},
+     "direction": "in", "verdict_on_hit": "pass", "verdict_on_miss": "warn",
+     "reason_template": "流向方「{a.dest}」为金融/政务机构且业务为其标准规程,机构要求即依据,证据形式不限官方界面截图(B05/B04')。",
+     "on_missing_data": "warn", "priority": 20, "tags": ["bank", "institution"]},
+
+    {"id": "rule_b01_purpose_explicit", "subject": "开户/业务目的明确", "effect": "gate",
+     "datasource_a": {"field_ref": "fld_reason"}, "operator": "regex",
+     "threshold": {"pattern": "机构名.*(投资|理财|合规|开户目的)"},
+     "direction": "not_match", "verdict_on_hit": "warn", "verdict_on_miss": "pass",
+     "reason_template": "仅说「要开户」未写明机构名+目的 → 预警补件(B01)。",
+     "priority": 40, "tags": ["bank"]},
+
+    {"id": "rule_c0x_authorization_dual_seal", "subject": "合作/授权类需授权链+双章(R02/R07)", "effect": "gate",
+     "datasource_a": {"field_ref": "fld_quals"}, "operator": "in_set",
+     "datasource_b": {"knowledge_ref": "kb_cooperation_quals"},
+     "direction": "in", "verdict_on_hit": "warn", "verdict_on_miss": "pass",
+     "reason_template": "合作/授权类(C01-C06)需授权链完整+双章;缺则预警补件。",
+     "on_missing_data": "warn", "priority": 50, "tags": ["cooperation", "authorization"]},
+
+    {"id": "rule_proven_not_stated", "subject": "被证明≠被说明:截图/IM转述 vs 官方文书", "effect": "gate",
+     "datasource_a": {"field_ref": "fld_reason"}, "operator": "crosscheck",
+     "rule_kind": "crosscheck",
+     "verdict_on_hit": "warn", "verdict_on_miss": "pass",
+     "reason_template": "关键事实仅靠截图/聊天转述、无官方文书佐证 → 预警补件(核心原则:被证明≠被说明)。例外:B05 机构IM告知有效。",
+     "on_missing_data": "warn", "priority": 30, "tags": ["evidence", "principle"]},
+
+    {"id": "rule_report_fill_advisory", "subject": "报表项/公摊填充建议", "effect": "advisory",
+     "rule_kind": "mapping",
+     "reason_template": "复审阶段填充建议,仅提醒不改结论。",
+     "priority": 90, "tags": ["fill", "advisory"]}
+  ],
+
+  "redlines": [
+    {"id": "rl_out_of_scope", "name": "越界/无管辖资质(公章、发货专用章、其它无管辖)",
+     "trigger": {"operator": "in_set", "datasource_a": {"field_ref": "fld_quals"},
+                 "knowledge_ref": "kb_out_of_scope_quals"},
+     "verdict": "manual", "hard_stop": true, "priority": 0,
+     "reason_template": "申请资质「{a}」非本审核管辖(公章/发货专用章类=行政、法人章类另判) → 越界跳过/转人工。",
+     "audit_note": "管辖边界·非红线驳回而是越界跳过",
+     "tags": ["redline", "scope"],
+     "_open_question_ref": "oq_redline_action"}
+  ],
+
+  "knowledge": [
+    {"id": "kb_my_audit_quals", "kind": "registry", "name": "本审核管辖资质清单(MY_AUDIT_QUALS)",
+     "schema": ["qual"], "match_index": ["qual"],
+     "rows": [{"qual": "法定代表人签名"}, {"qual": "法定代表人章"}, {"qual": "营业执照副本复印件"},
+              {"qual": "品牌授权书"}, {"qual": "商标注册证"}, {"qual": "商标授权书"}],
+     "source_ref": "lib/scope-filter.js MY_AUDIT_QUALS(需回源核对全量)"},
+
+    {"id": "kb_out_of_scope_quals", "kind": "registry", "name": "越界清单",
+     "schema": ["qual"], "rows": [{"qual": "公章"}, {"qual": "其它（无管辖资质）"}],
+     "source_ref": "index.json a01_out_of_scope"},
+
+    {"id": "gs_qualification_golden", "kind": "golden", "name": "资质 golden 案例(草稿·需补全至≥8)",
+     "cases": [
+       {"case_id": "gs_001", "desc": "银行标准开户+机构IM告知→通过",
+        "inputs": {"fld_dest": "工商银行", "fld_reason": "开对公户用于合规验资", "fld_quals": "法定代表人章"},
+        "expect": {"verdict": "pass", "fired_rules": ["rule_b05_institution_backed"]}},
+       {"case_id": "gs_002", "desc": "仅说要开户、无目的→预警补件",
+        "inputs": {"fld_dest": "某银行", "fld_reason": "开户"},
+        "expect": {"verdict": "warn", "fired_rules": ["rule_b01_purpose_explicit"]}},
+       {"case_id": "gs_003", "desc": "公章类→越界跳过",
+        "inputs": {"fld_quals": "公章"},
+        "expect": {"verdict": "manual", "fired_rules": ["rl_out_of_scope"]}}
+     ]}
+  ],
+
+  "strategy": {
+    "id": "stg_qualification_v1", "playbook": "multi_doc_crosscheck",
+    "playbook_reason": "需 申请单×附件×流向方×管辖清单 多源交叉核验",
+    "verdict_scale": ["pass", "warn", "reject", "manual"],
+    "verdict_labels": {"pass": "通过", "warn": "需补充", "reject": "退回", "manual": "转人工"},
+    "default_on_missing_data": "warn", "default_on_ambiguous": "warn",
+    "aggregation": {
+      "order": ["redline", "gate", "advisory"],
+      "rule": ["任一redline命中→其verdict(短路)", "否则任一gate=reject→reject",
+               "否则任一gate=manual→manual", "否则任一gate=warn→warn(需补充)", "否则→pass",
+               "advisory永不改verdict,只汇入notes"],
+      "severity_order": ["reject", "manual", "warn", "pass"]
+    },
+    "human_review": {"trigger_verdicts": ["warn", "manual", "reject"], "route": "FAIR(F/A/I/R 人工确认)"},
+    "explainability": {"require_reason_per_fired_rule": true, "attach_evidence_refs": true}
+  },
+
+  "open_questions": [
+    {"q_id": "oq_verdict_map", "confidence": "green", "auto_fillable": true,
+     "q": "四档映射:通过/需补充/退回/转人工 → pass/warn/reject/manual", "suggested": "已按此映射,默认采纳"},
+    {"q_id": "oq_quals_alias", "confidence": "yellow", "must_ask": true,
+     "q": "'申请资质'与'拟用资质'确为同一字段的新旧名?已归一为 fld_quals", "options": ["是(采纳)", "否(拆两字段)"]},
+    {"q_id": "oq_redline_action", "confidence": "red", "must_ask": true,
+     "q": "越界/无管辖命中的动作:是'跳过不审(skip)'还是'转人工(manual)'?原文是'越界跳过',但草稿暂落 manual", "note": "🔴 必须业务/王爷确认——涉及是否登台账"},
+    {"q_id": "oq_my_quals_full", "confidence": "red", "must_ask": true,
+     "q": "kb_my_audit_quals 只抄了部分,需回源 lib/scope-filter.js MY_AUDIT_QUALS 全量补齐", "note": "🔴 不猜,待回源"},
+    {"q_id": "oq_golden_coverage", "confidence": "yellow", "must_ask": true,
+     "q": "golden 现仅 3 例,需补至 ≥8 覆盖四档+边界+≥1翻案case(可从 90 条历史审批提炼)", "suggested": "从 pending_actions 历史 CLOSED 件反推"}
+  ]
+}
