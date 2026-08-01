@@ -6,6 +6,15 @@
 
 > 本轮主线：治两个「靠运行时/靠用户」的脆弱点 —— ①setup 现场拉审批定义靠 app scope 不可预测；②list 返回 0/报错却让用户自己排查。协作：静态清单主体由 zizhi（资质审核助手）预拉+落地，list 异常兜底与配置加固由大公子实现并整合验证。发版 v3.2.3 @ 6ba12c4。
 
+### v3.2.5（同日追加）：LibreOffice 在 Setup 阶段知情自选
+
+> 背景（王爷 + zizhi 排查）：LibreOffice 用于把旧版 .doc / 非标 DOCX 附件转可读格式，缺了这些附件会标「转人工」。但此前**全程不提示**——install.md/SKILL.md 没提，doctor 只 `console.error` 一行到 stderr（飞书环境用户看不见），.env.example 仅一行无解释的注释。用户从装到跑，**不知道缺了什么、缺了会怎样、值不值得补**。目标：Setup 阶段讲清「作用/装了怎样/不装怎样」，让用户知情自选（非强制）。
+
+- **doctor 加 LibreOffice 检查**（`scripts/audit-tool.cjs` cmdDoctor · `lib/data-prep.js`）：**措施**——把 `data-prep.js` 的 `resolveSofficeBin` 抽出**静默探测 `detectSofficeBin()`**（无副作用日志、单一事实源路径清单）并导出；doctor 调它，✅已装/⚠️未装(带后果+`libreoffice.org/download` 安装引导)。**逻辑**——⚠️(非🔴)不阻断 doctor；且 doctor.checks 经 v3.2.4 的①首跑门自动进 `config_check` 卡，**用户首跑即可看到 LibreOffice 状态、当场决定装不装**。原来只 console.error 到 stderr、飞书里看不见。
+- **install.md 加「可选：要不要装 LibreOffice」段**：作用/装了怎样/不装怎样(单个附件转人工·不丢数据不报错不影响其它)/怎么选(多数新版 docx 不装也能跑·想省人工就 5 分钟装)/安装链接。
+- **对 zizhi 方案的取舍**：采纳其「doctor 摊状态 + install.md 讲清」，但比其 diff 多一步——它假设 `resolveSofficeBin()` 可直接用，实测该函数**未导出且 miss 时有 console.error 噪音**（现被首跑 list 调会污染卡），故抽静默版导出复用；**未做其第③条**（审核流加 doc_convert_failed 提示）——超出 Setup 范围，且附件失败时已有「[旧版.DOC 转换失败→转人工]」文案。
+- **验证**：golden 131/0 · doctor 实跑显示 `✅ LibreOffice: 已安装`（王爷机器）· 静默探测无 stderr 噪音。
+
 ### v3.2.4（同日追加）：首跑单一入口 + 就绪反馈 + .env 模板行内注释修复
 
 > 背景：王爷给了一份 OpenClaw 技能 onboarding 方法论文档（下载即触发的交互式 setup 向导：bootstrap 门禁+五步法+脚本硬控制）。对照后判断——我们大头已落地、多处领先（doctor 盘点+自动修、zero-config 默认、静态清单、set-env 确定性写、profile fail-safe）。**不照搬重向导**（逐字段状态机是为"手填一堆凭证"设计的，我们几乎全自动注入/默认，搬来反而复杂）；也**不往 SKILL.md 堆引导词**（文档自己的最佳实践就是"逻辑下沉脚本、SKILL.md 只指路"）——只补两处真缺项，全在脚本层、SKILL.md 零增重。

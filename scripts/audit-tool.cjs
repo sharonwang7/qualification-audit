@@ -2608,6 +2608,13 @@ function cmdDoctor(opts) {
   const gc = path.join(__dirname, 'gen_card_from_json.ps1');
   add(fs.existsSync(gc) ? '✅' : '🔴', 'gen_card_from_json.ps1', fs.existsSync(gc) ? '在位' : '缺失(技能包不完整，重新 pull)');
 
+  // 8) LibreOffice（可选·非强制，2026-08-01 王爷定）：Setup 阶段就把「作用/装了怎样/不装怎样」讲清、让用户知情自选。
+  //   ⚠️(非🔴)不阻断 doctor；因 doctor.checks 会经①首跑门进 config_check 卡，用户首跑即可看到、当场决定要不要装。
+  let sofficeBin = null;
+  try { const dp = require('../lib/data-prep.js'); sofficeBin = dp.detectSofficeBin && dp.detectSofficeBin(); } catch (e) {}
+  if (sofficeBin) add('✅', 'LibreOffice', '已安装 → 旧版 .doc / 非标 DOCX 附件都能读，附件全格式覆盖');
+  else add('⚠️', 'LibreOffice', '未装(非必须)：碰到【旧版 .doc / 非标 DOCX】附件会标「转人工」(不丢数据·不报错·其余格式照常审)', '想全格式覆盖就花 5 分钟装：libreoffice.org/download 一路下一步，装完 doctor 自动探测到');
+
   const badCount = checks.filter(c => c.startsWith('🔴')).length;
   return {
     ok: badCount === 0,
