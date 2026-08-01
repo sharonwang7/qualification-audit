@@ -6,7 +6,7 @@
 
 | 资产 | 类型 | 特征 | 状态 |
 |---|---|---|---|
-| `golden_tests/runner.cjs`（T1–T5，131 用例） | **Mock 回归** | 直接 `require` 目标函数、**不起进程/不碰飞书 API**；秒级；T1=FAIR 守卫 / T2=gen-card·spawn 模板 / T3=golden_flow / T4=结构·SKILL.md 行数闸 / T5=判据一致性 | ✅ 现有 |
+| `golden_tests/runner.cjs`（T1–T5，131 用例） | **回归测试（Mock 实现）** | 目的是**防退化**(改动后重跑历史用例)=回归；实现上直接 `require` 目标函数、**不起进程/不碰飞书 API**=Mock。秒级；T1=FAIR 守卫 / T2=gen-card·spawn 模板 / T3=golden_flow / T4=结构·SKILL.md 行数闸 / T5=判据一致性 | ✅ 现有 |
 | `scripts/smoke.cjs`（7 项） | **冒烟 / BVT** | **真起子进程** `node audit-tool.cjs …` 跑核心链路；`QUAL_PROFILE=test` 隔离台账+禁真 approve；**只判代码级崩溃**（ReferenceError/语法/编码/非受控退出），飞书网络错不算；**发 tag 前必绿（已入棘轮）** | ✅ 现有 |
 | `scripts/card-live-test.cjs` | 真链路点测 | 真发卡 POST-vs-PATCH（活卡幂等） | ✅ 现有 |
 | `batch-t2-eval / gen-eval-tasks / compare-eval-results` | **AI 判断一致性评测**（agent-eval） | 跑子代理判断、比对结论 | 🟡 有工具，基线未固化 |
@@ -21,7 +21,9 @@
 | **T3 测试环境（回归主场）** | 业务逻辑有没有被改坏、防退化 | **真实上下游回归** | `QUAL_PROFILE=test` 对真实审批跑 list/case + **真机对比改动前后 person/quals/scope 判定** + eval 一致性 + card-live-test | **无 Mock** | 慢（后置） |
 | **T4 预发（上线前最后一关）** | 生产同款环境跑得稳、结果对、无隐性退化 | prod-1:1、真实样本回放/抽样冒烟 | prod profile 影子跑 / 真实样本抽样 | 无 Mock | 按风险 |
 
-> **关键取舍（遵你的结论）**：**CI 不放全量真链路回归**。我们的 golden 是 **Mock、秒级**，属"单测/mock 回归"，可进 CI；**真数据全量回归后置到 T3**。冒烟(smoke) ≠ 回归(golden)：冒烟只看"活不活"，回归看"老逻辑有没有坏"。
+> **⚠️ 两个维度别混（golden 到底是 Mock 还是回归？）**：**Mock↔真链路**说的是"依赖怎么处理"；**回归↔冒烟**说的是"测试目的"——两轴正交、不互斥。**golden 本质是回归**（目的=防退化、重跑历史用例），只是**用 Mock 实现**（require 直调、隔离飞书 API，所以快）。所以：**回归按实现分两种——① Mock 回归(golden，T1/CI，快) ② 真链路回归(T3，真上下游，慢·后置)**；golden 是①，不是"不算回归"。
+>
+> **关键取舍（遵你的结论）**：**CI 不放全量真链路回归**（慢、阻塞迭代）；我们的 golden 是 Mock 回归、秒级，可进 CI；**真链路全量回归后置到 T3**。冒烟(smoke) ≠ 回归(golden)：冒烟只看"活不活"，回归看"老逻辑有没有坏"。
 
 ## 三、按业务场景对号入座（什么改动 → 测到什么程度）
 
