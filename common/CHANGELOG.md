@@ -6,6 +6,15 @@
 
 > 本轮主线：治两个「靠运行时/靠用户」的脆弱点 —— ①setup 现场拉审批定义靠 app scope 不可预测；②list 返回 0/报错却让用户自己排查。协作：静态清单主体由 zizhi（资质审核助手）预拉+落地，list 异常兜底与配置加固由大公子实现并整合验证。发版 v3.2.3 @ 6ba12c4。
 
+### v3.2.4（同日追加）：首跑单一入口 + 就绪反馈 + .env 模板行内注释修复
+
+> 背景：王爷给了一份 OpenClaw 技能 onboarding 方法论文档（下载即触发的交互式 setup 向导：bootstrap 门禁+五步法+脚本硬控制）。对照后判断——我们大头已落地、多处领先（doctor 盘点+自动修、zero-config 默认、静态清单、set-env 确定性写、profile fail-safe）。**不照搬重向导**（逐字段状态机是为"手填一堆凭证"设计的，我们几乎全自动注入/默认，搬来反而复杂）；也**不往 SKILL.md 堆引导词**（文档自己的最佳实践就是"逻辑下沉脚本、SKILL.md 只指路"）——只补两处真缺项，全在脚本层、SKILL.md 零增重。
+
+- **① list 首跑门并进 doctor 体检（单一入口）**（`cmdList`）：**原因**——首跑体验原本拆三段（list 管角色/doctor 管配置/setup 管审批流），靠 AI 记得按序跑。**措施**——`needs_role_setup` 分支里同时调 `cmdDoctor({})`（只读文件、无 API），返回 `config_check`(all_green/summary/checks) + `next_action`；正常跑时若缺发卡群加轻量 `config_warning`。**逻辑**——一个 list 就把「选岗+配置缺口」一次性摊给用户，不依赖 AI 编排；已配好的用户 role 已设、不进此分支、零影响。
+- **② set-env 写入后回「就绪」反馈**（`cmdSetEnv`）：**原因**——配好是静默生效，用户没有"配完了"的正反馈，也没明确下一步。**措施**——设完 `QUAL_AUDIT_ROLE` 后自动体检一次，全绿则回 `ready:true` + `ready_card`(标题/岗位/环境/快捷指令)，还差项则回 `pending_config` 摊出🔴。**逻辑**——让"配好"这件事有终点+正反馈，AI 直接渲染成就绪卡，不用自己判断状态。「配好后不再触发」本就由 role flag 保证（set 了就永不再弹选岗卡）。
+- **.env.example 行内注释修复（zizhi 并发改动，大公子核实并入）**：**背景**——`.env` 加载器(`audit-tool.cjs:34`)只按第一个 `=` 切值、**不剥行内注释**，故 `FEISHU_APP_ID=cli_xxx  # 注释` 会把注释也算进值里 → 用户复制模板成 .env 后 App ID 变脏（新 ③ fail-loud 能抓到，但模板本身产脏值就不对）。**措施**——zizhi 把 FEISHU_APP_ID/QUAL_SOFFICE_BIN 的行内注释拆到单独行、去 BOM、LARK_AUDIT_CHAT_ID 占位符清空；大公子核实加载器行为确认是真修复后并入本提交。**注**：这是并发同目录编辑（软链），已核对无残留活行内注释、audit-tool.cjs 改动未被互相清掉。
+- **验证**：golden 131/0 · 就绪卡 ready:true 全字段正常 · 首跑门 needs_role_setup+config_check 正常 · set-env 测试全程 .env 备份/还原、哈希一致零改动。
+
 - **静态审批流清单：预拉一次、烘焙进技能包，setup 零 API 调用**（`common/approval-definitions.json` 新增 · `scripts/refresh-approval-defs.cjs` 新增 · `lib/connector-feishu.js` · `scripts/audit-tool.cjs`）：
   - **背景**：老 `setup` 走 `lark-cli api GET /approval/v4/approvals --as user` 现场拉审批定义。实测——桥 app(cli_aaa274 王伊瑄)有 `approval:task/instance` scope 但**缺 `approval:definition`** → setup 报 99991679 missing_scope 拉不到；zizhi 的 app 有该 scope → 能拉到 72 条。**谁跑、用哪个 app 决定成败**，对新团队(如益智虾)不可预测。
   - **原因与逻辑**：公司审批工作流是**固定**的（月级才变），本不该每次交互都现场拉。固定的东西就该**预拉一次、缓存进技能包** → 之后零 API 调用、零 scope 依赖 → 对所有团队/所有 agent 都稳，从根上绕开「靠运行时 app scope」这个病。

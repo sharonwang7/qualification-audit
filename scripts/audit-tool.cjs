@@ -743,8 +743,12 @@ function cmdList(limit, sinceDays) {
   //   ⚠️ 只影响子代理的台账/群路由；approve 硬锁仍只认【显式 env prod】(line 54/1470)、不读此 sentinel → fail-safe 不受影响。
   try { const _sp = path.join(__dirname, '..', 'scratch', 'active_profile'); fs.mkdirSync(path.dirname(_sp), { recursive: true }); fs.writeFileSync(_sp, QUAL_PROFILE); } catch (e) {}
 
-  // 0. 首次运行检测：QUAL_AUDIT_ROLE 未设 → 返回 needs_role_setup，agent 发卡片引导用户选择
+  // 0. 首次运行检测：QUAL_AUDIT_ROLE 未设 → 返回 needs_role_setup，agent 发卡片引导用户选择。
+  //   ①单一入口（2026-08-01）：同时并进 doctor 配置体检——首跑一个 list 就把「选岗 + 配置缺口」一次性摊给用户，
+  //   不靠 AI 记得另跑 doctor。config_check 只读文件、无 API 调用；已配好的用户 role 已设、根本不进此分支、零影响。
   if (!process.env.QUAL_AUDIT_ROLE) {
+    let cfg = null;
+    try { cfg = cmdDoctor({}); } catch (e) {}
     return {
       ok: false,
       needs_role_setup: true,
@@ -752,7 +756,11 @@ function cmdList(limit, sinceDays) {
       roles: [
         { value: 'faren', label: '法人岗', desc: '审核法定代表人签名、股东、董事等相关资质' },
         { value: 'feifaren', label: '非法人岗', desc: '审核品牌授权书、商标注册证、商标授权书等' }
-      ]
+      ],
+      config_check: cfg ? { all_green: !!cfg.ok, summary: cfg.summary, checks: cfg.checks } : null,
+      next_action: (cfg && !cfg.ok)
+        ? '① 发选岗卡让用户选岗位 → set-env QUAL_AUDIT_ROLE 写入；② config_check 里还有🔴项，跑 doctor --fix --chat-id <当前群> 一并补齐；③ 重跑 list。'
+        : '发选岗卡让用户选岗位 → set-env QUAL_AUDIT_ROLE 写入 → 重跑 list 即可开始（配置已就绪）。'
     };
   }
 
@@ -988,6 +996,7 @@ function cmdList(limit, sinceDays) {
       ? '🔴 正式环境：可做真实审批·真发群，谨慎。'
       : `🧪 测试环境（默认）：能出卡到 ${CFG.chatId} 群、能走完流程，但【点 F/A/I/R 不会真审批】、台账隔离。流程 OK 后让我帮你切正式(prod)。`,
     chat_id: CFG.chatId,                // 当前发卡群，供 AI 核对/告知
+    config_warning: !CFG.chatId ? '⚠️ 未配发卡群(LARK_AUDIT_CHAT_ID)——能审但出不了卡。让我帮你跑 doctor --fix --chat-id <当前群> 补上。' : null,  // ①首跑门轻量项
     definition_code_warning: defCodeWarning || null,  // 异常1：code 不在公司审批流清单时的诊断（否则 null）
     note: `${defCodeWarning ? defCodeWarning + ' ' : ''}${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}${(process.env.QUAL_AUDIT_ROLE && roleDropped > 0) ? `；⚠️角色[${process.env.QUAL_AUDIT_ROLE}]过滤掉 ${roleDropped} 条非本岗位件（若疑漏审，核对 role_dropped_sample 或不设角色重跑）` : ''}。`,
     tasks: selected.map(t => ({
@@ -2629,7 +2638,30 @@ function cmdSetEnv(key, val) {
     ? '🔴 已切【正式环境】。下次 list 生效，之后审批会【真执行、真发群】。（本进程不变、天然防误触发）'
     : key === 'QUAL_AUDIT_ROLE' ? `已设岗位=${val}（${val === 'faren' ? '法人岗' : '非法人岗'}）→ 重跑 list 即按此岗位过滤。`
     : `已写入 .env：${key}=${val}`;
-  return { ok: true, action: 'set-env', key, value: val, note };
+  const out = { ok: true, action: 'set-env', key, value: val, note };
+  // ②就绪反馈（2026-08-01）：设完角色后自动体检一次(读盘、无 API)——全绿则回「✅已就绪」payload 供 AI 渲染就绪卡、
+  //   给用户明确正反馈+下一步；还差项就把🔴摊出来让用户补。让「配好了」这件事有终点、不用 AI 自己判断。
+  if (key === 'QUAL_AUDIT_ROLE') {
+    try {
+      const h = cmdDoctor({});
+      if (h && h.ok) {
+        out.ready = true;
+        out.ready_card = {
+          title: '✅ 资质审核已就绪',
+          role: val === 'faren' ? '法人岗' : '非法人岗',
+          profile: (process.env.QUAL_PROFILE || 'test'),
+          quickstart: [
+            '你可以直接对我说：「审核」或「跑 list」开始处理待办',
+            '当前默认 🧪 测试环境（点 F/A/I/R 不会真审批、台账隔离）；流程确认 OK 后说「切正式环境」再真审批'
+          ]
+        };
+      } else if (h) {
+        out.pending_config = { summary: h.summary, blockers: (h.checks || []).filter(c => c.startsWith('🔴')) };
+        out.note += ' —— 但还差配置项（见 pending_config），跑 doctor --fix --chat-id <当前群> 补齐后再开始。';
+      }
+    } catch (e) { /* 体检失败不阻断写入结果 */ }
+  }
+  return out;
 }
 
 // ── batch-skip（2026-07-09，#1/#2）：子代理判定 in_scope=false/should_skip 时调此登记 skip，让 await-batch 不空等、gen-card 硬闸放行。──
