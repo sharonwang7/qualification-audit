@@ -80,9 +80,9 @@ P0 **不做**任何物理切割。将来若做，按消费方分两条路：
 
 ---
 
-## 六、商业化视角：这张表就是"规则包"边界
+## 六、复用视角：这张表就是"规则包"边界
 
-换一家公司复用本平台时，需替换的 = 本文标「专有」的全部：
+换不同岗位复用本平台时，需替换的 = 本文标「专有」的全部：
 - **代码规则**：deterministic-rules.json + entities/overseas/department JSON + scope-filter/deterministic-checker 的行业逻辑
 - **判断 rubric**：analysis-protocol 的专有段（证据链层级/数值边界/四要素/退回触发）+ scene-principles + examples
 
