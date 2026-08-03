@@ -2,6 +2,7 @@
 # 说明：改到哪个目录 → 要求对应 owner approve 才能合并
 # 等同事注册 GitHub 账号后，把 TODO 占位替换为 @github-username
 
+总经办资质审核
 # 共用：双方都必须 approve
 common/       @sharonwang7
 scripts/      @sharonwang7
@@ -15,3 +16,5 @@ faren/        @sharonwang7
 
 # 非法人团队（feifaren）
 feifaren/     @duduyiyiyi @linlinzk
+
+法务合同审查
