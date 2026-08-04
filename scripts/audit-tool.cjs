@@ -248,7 +248,7 @@ const PREVIEW_CHARS = 240;
 const READ_DEFAULT_MAX = 4000;
 
 // approve/reject/note 成功后 fire-and-forget 同步 bitable（兼容 大公子 和 OpenClaw）
-const SYNC_SCRIPT = process.env.QUAL_SYNC_SCRIPT || path.join(SKILL_ROOT, '..', 'scripts', 'sync-audit-bitable.cjs');
+const SYNC_SCRIPT = process.env.QUAL_SYNC_SCRIPT || path.join(SKILL_ROOT, 'scripts', 'sync-audit-bitable.cjs');
 function spawnAutoSync() {
   if (!fs.existsSync(SYNC_SCRIPT)) return;
   const child = spawn('node', [SYNC_SCRIPT, '--days=7'], {
@@ -2399,7 +2399,7 @@ function cmdGenCard(round, date, remaining) {
   // 📤 发卡后自动同步吞吐轮次 → bitable（fire-and-forget，2026-07-13，B）：发一批就更一次，让「AI吞吐·轮次」表准实时。
   //   仅生产触发（CFG.allowApprove=prod；sync 读的是生产 rounds.jsonl，test 无需推）；detached+unref → 不阻塞发卡、失败绝不影响主流程。
   try {
-    const _syncScript = path.join(SKILL_ROOT, '..', 'scripts', 'sync-rounds-bitable.cjs');
+    const _syncScript = path.join(SKILL_ROOT, 'scripts', 'sync-rounds-bitable.cjs');
     if (CFG.allowApprove && fs.existsSync(_syncScript)) {
       const _c = require('child_process').spawn(process.execPath, [_syncScript], { detached: true, stdio: 'ignore', cwd: path.dirname(_syncScript), windowsHide: true });
       _c.unref();
