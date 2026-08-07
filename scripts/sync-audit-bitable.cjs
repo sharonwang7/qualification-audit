@@ -89,13 +89,28 @@ fs.mkdirSync(TMP_DIR, { recursive: true });
 
 function readJson(p) { return JSON.parse(fs.readFileSync(p, 'utf8').replace(/^﻿/, '')); }
 
+// 传输可移植性修复（2026-08-07 王爷定，别人同步不了的真凶）：原来只裸调 `lark-cli` 二进制——异机上二进制不在 PATH、
+//   或只用 lark-cli 的 JS 包(QUAL_LARKCLI_JS)时就失败(审核走 connector 用 JS 兜底正常、sync 独独挂)。改为【镜像 connector 的传输】：
+//   优先 `node <run.js>`(QUAL_LARKCLI_JS 或默认路径存在时)，找不到 JS 入口才兜底退回 `lark-cli` 二进制；并处理 saved_path(大结果落文件)。
+const LARK_CLI_JS = process.env.QUAL_LARKCLI_JS ||
+  'C:\\Users\\FD\\AppData\\Roaming\\npm\\node_modules\\@larksuite\\cli\\scripts\\run.js';
+const LARK_DIRECT = (() => { try { return fs.existsSync(LARK_CLI_JS); } catch (e) { return false; } })();
 function larkBase(extraArgs) {
   const args = ['base', ...extraArgs, '--as', 'user'];
-  const out  = execFileSync('lark-cli', args, {
-    encoding: 'utf8', maxBuffer: 20 * 1024 * 1024,
-    cwd: TMP_DIR, shell: true, timeout: 60000
-  });
-  return JSON.parse(out);
+  const out = LARK_DIRECT
+    ? execFileSync(process.execPath, [LARK_CLI_JS, ...args.flatMap(a => String(a).split(' ')).filter(s => s.length)], {
+        encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, cwd: TMP_DIR, timeout: 60000, windowsHide: true
+      })
+    : execFileSync('lark-cli', args, {
+        encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, cwd: TMP_DIR, shell: true, timeout: 60000, windowsHide: true
+      });
+  const meta = JSON.parse((out.trim()) || '{}');
+  if (meta.saved_path && fs.existsSync(meta.saved_path)) {
+    const d = JSON.parse(fs.readFileSync(meta.saved_path, 'utf8').replace(/^﻿/, ''));
+    try { fs.unlinkSync(meta.saved_path); } catch (e) {}
+    return d;
+  }
+  return meta;
 }
 
 // ── Step 1: collect audit cases from recent N days ──

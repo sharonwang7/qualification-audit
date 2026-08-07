@@ -2410,6 +2410,10 @@ function cmdGenCard(round, date, remaining) {
     }
   } catch (e) { /* fire-and-forget，绝不影响发卡 */ }
 
+  // 📤 发卡后也同步【审核结果/AI建议/备注】→ bitable（2026-08-07 王爷定）：审核完(PENDING_REVIEW)就写、不必等 FAIR，
+  //   AI原始建议/询问中状态出卡即入表，最终结论 FAIR 后再更（与 FAIR 后同步互补）。仅生产、detached fire-and-forget、失败绝不影响发卡。
+  try { if (CFG.allowApprove) spawnAutoSync(); } catch (e) { /* 绝不影响发卡 */ }
+
   // 2026-07-06：返回明确的动作语义，杜绝"updated:false 被误读成失败→重发"（那正是"每次2张卡"的人为诱因）。
   const cardAction = existingMsgId ? '已更新同一张卡（原地 PATCH，未新发）' : '已新建一张卡（本批首次）';
   return {
