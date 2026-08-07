@@ -1608,9 +1608,13 @@ function cmdWriteResult(instanceCode, resultFile) {
     //   背景：期限识别原只在 child-judge 文字规则(D4/C02/R15)、无硬闸 → LLM 有时审有时不审（王爷实测不稳定）。
     {
       const _seal = String(result.sealType || '');
-      const _blob = JSON.stringify(_caseData.attachments || []) + JSON.stringify(_form);
-      const _hasContract = /合同|协议/.test(_blob);
-      const _isAuth      = /授权书/.test(_seal) || /授权书/.test(_blob);
+      // 误命中修复（2026-08-07 王爷定）：原来扫【整个 form JSON】——"合同用印审批附件"这类【字段名】里的"合同"二字就误触发 G6，
+      //   诉讼件(D1·凡岛自诉、无真实合同)被死锁。改为只看【真实合同/授权书实体】：附件正文 + 合同明细字段【值】 + sealType，字段名不算。
+      //   → A类诉讼(无真实合同)自然放过；B类(有委托合同实体)照旧要期限；品牌/商标授权书(sealType)照旧要期限比对。
+      const _attachText = (_caseData.attachments || []).map(a => String((a && a.content) || '')).join('\n');
+      const _contractDetail = String((_form && _form['合同明细']) || '');
+      const _hasContract = /合同|协议/.test(_attachText) || /合同|协议/.test(_contractDetail);
+      const _isAuth      = /授权书/.test(_seal) || /授权书/.test(_attachText);
       if (_hasContract || _isAuth) {
         const _hasDate = /(\d{4}\s*[-/.年]\s*\d{1,2})|有效期|起止|截止|到期|长期有效|开放式期限/.test(_fa);
         const _hasCompare = !_isAuth || /合同期限|期限内|期限范围|覆盖.*合同|超出合同|开放式期限/.test(_fa);
