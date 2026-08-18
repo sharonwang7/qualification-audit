@@ -400,41 +400,48 @@ function buildTrademarkRegIndex() {
 }
 
 // ── 检查审批实例 iCommentTime 之后是否有新的非 AI 评论（申请人已回复）──
-function hasNewUserComment(instanceCode, afterIsoTime) {
-  try {
-    const url = `/open-apis/approval/v4/instances/${instanceCode}/comments`;
-    const data = larkApi('GET', url, { user_id: USER_OPEN_ID, user_id_type: 'open_id' }, 'bot');
-    const allComments = (data && data.data && data.data.comments) || (data && data.comments) || [];
-    const comments = allComments.filter(c => !c.is_delete);
-    const afterMs = afterIsoTime ? new Date(afterIsoTime).getTime() : 0;
-    const extractText = c => {
-      try { return JSON.parse(c.content || '{}').text || ''; } catch (e) { return (c.content || '').toString(); }
-    };
-    // F29/F13：优先按作者身份判"新用户回复"——作者 ≠ 审核身份(USER_OPEN_ID)；
-    // 不再单靠文本不含"AI审核/深度审视"（申请人可复制这两个串绕过→回复被吞→案件卡死）。
-    // 仅当评论无作者字段时，退回文本启发式兜底。
-    // 展开顶层评论 + 嵌套回复（replies）：申请人常以"回复 AI 评论"形式补答，只看顶层会漏 → 案件卡死
-    const flat = [];
-    for (const c of comments) {
-      flat.push(c);
-      const reps = (c.replies || c.reply_list || c.comment_reply_list || []).filter(r => !r.is_delete);
-      for (const r of reps) flat.push(r);
-    }
-    return flat.some(c => {
-      // create_time 飞书返回毫秒(13位)；历史 *1000 是把毫秒当秒的 bug → 时间闸恒失效。按位数归一。
-      const rawT = Number(c.create_time || c.created_time || c.created_at || 0);
-      const ts = rawT > 1e12 ? rawT : rawT * 1000;
-      if (ts <= afterMs) return false;
-      // 作者字段是 commentator（历史误用 user_id/open_id 恒空 → 只能靠文本兜底，脆弱）
-      const author = c.commentator || c.user_id || c.open_id || c.commenter_id || (c.user && (c.user.user_id || c.user.open_id)) || '';
-      if (author) return author !== USER_OPEN_ID;
-      const text = extractText(c);
-      return !text.includes('AI审核') && !text.includes('深度审视');
-    });
-  } catch (e) {
-    console.error(`[hasNewUserComment] 查评论失败(${instanceCode})，本轮不翻转状态，下次 list 轮询重试: ${e.message}`);
-    return false; // 失败则安全默认：不翻转状态（下轮重试）
+// 返回：true=有新的申请人回复；false=确无新回复；null=查询出错（区别于 false，供上层累计告警，不再静默当无回复）。
+// 三层加固（2026-08-18 王爷定·#104 漏翻转事故）：双身份(bot→user)兜底——两种身份看到的评论可能不同，任一识别到新回复即算回复；
+//   仅当两身份都【出错】才返回 null。原来单 bot 身份 + 出错静默 return false，件会永远卡 AWAITING 无告警。
+function _checkNewUserCommentOnce(instanceCode, afterIsoTime, identity) {
+  const url = `/open-apis/approval/v4/instances/${instanceCode}/comments`;
+  const data = larkApi('GET', url, { user_id: USER_OPEN_ID, user_id_type: 'open_id' }, identity);
+  const allComments = (data && data.data && data.data.comments) || (data && data.comments) || [];
+  const comments = allComments.filter(c => !c.is_delete);
+  const afterMs = afterIsoTime ? new Date(afterIsoTime).getTime() : 0;
+  const extractText = c => {
+    try { return JSON.parse(c.content || '{}').text || ''; } catch (e) { return (c.content || '').toString(); }
+  };
+  // F29/F13：优先按作者身份判"新用户回复"——作者 ≠ 审核身份(USER_OPEN_ID)；无作者字段时退回文本启发式。
+  // 展开顶层评论 + 嵌套回复（replies）：申请人常以"回复 AI 评论"形式补答，只看顶层会漏 → 案件卡死。
+  const flat = [];
+  for (const c of comments) {
+    flat.push(c);
+    const reps = (c.replies || c.reply_list || c.comment_reply_list || []).filter(r => !r.is_delete);
+    for (const r of reps) flat.push(r);
   }
+  return flat.some(c => {
+    // create_time 飞书返回毫秒(13位)；历史 *1000 是把毫秒当秒的 bug → 时间闸恒失效。按位数归一。
+    const rawT = Number(c.create_time || c.created_time || c.created_at || 0);
+    const ts = rawT > 1e12 ? rawT : rawT * 1000;
+    if (ts <= afterMs) return false;
+    const author = c.commentator || c.user_id || c.open_id || c.commenter_id || (c.user && (c.user.user_id || c.user.open_id)) || '';
+    if (author) return author !== USER_OPEN_ID;
+    const text = extractText(c);
+    return !text.includes('AI审核') && !text.includes('深度审视');
+  });
+}
+function hasNewUserComment(instanceCode, afterIsoTime) {
+  let sawError = false;
+  for (const ident of ['bot', 'user']) {
+    try {
+      if (_checkNewUserCommentOnce(instanceCode, afterIsoTime, ident)) return true; // 任一身份命中即算回复
+    } catch (e) {
+      sawError = true;
+      console.error(`[hasNewUserComment] 查评论失败(${instanceCode}, --as ${ident}): ${e.message}`);
+    }
+  }
+  return sawError ? null : false; // 两身份都没查到新回复：有错→null(疑似卡死·上层告警)，无错→false(确无回复)
 }
 
 // ── comments：拉取审批实例评论（申请人回复 / AI审核评论），手动复审前核对，杜绝"查错接口=假空=漏回复" ──
@@ -900,17 +907,43 @@ function cmdList(limit, sinceDays) {
   // 必须在 BUILD_WL 之前跑，确保刚翻转的件能以 APPLICANT_REPLIED 身份进入本轮 worklist。
   // 网络判定在锁外，仅翻转写入放锁内，避免长时间持锁。
   const flips = [];
+  const _paWrites = [];          // 需持久化的条目（翻转 或 失败计数变化）
+  const staleAwaiting = [];      // Layer1（2026-08-18）：疑似漏了申请人回复的 AWAITING 件，list 报警、漏了看得见
+  const _staleDays = Number(process.env.QUAL_AWAITING_STALE_DAYS || 3);
+  const _nowMs = Date.now();
   for (const [code, entry] of Object.entries(pa)) {
-    if (code === '__meta' || entry.state !== 'AWAITING_APPLICANT' || !entry.iCommentTime) continue;
-    if (hasNewUserComment(code, entry.iCommentTime)) {
+    if (code === '__meta' || entry.state !== 'AWAITING_APPLICANT') continue;
+    let replied = false, errored = false;
+    if (entry.iCommentTime) {
+      const r = hasNewUserComment(code, entry.iCommentTime); // true=有回复 / false=确无 / null=查询出错
+      if (r === true) replied = true;
+      else if (r === null) errored = true;
+    }
+    if (replied) {
       entry.state = 'APPLICANT_REPLIED'; // 同步内存，让 BUILD_WL 立即看到
+      if (entry.commentCheckFails) entry.commentCheckFails = 0;
       flips.push(code);
+      _paWrites.push(code);
+    } else {
+      // Layer2：查评论出错累计次数（不再静默）；恢复正常则清零
+      if (errored) { entry.commentCheckFails = (entry.commentCheckFails || 0) + 1; _paWrites.push(code); }
+      else if (entry.commentCheckFails) { entry.commentCheckFails = 0; _paWrites.push(code); }
+      // Layer1：疑似漏回复 = 长期未翻转 / 连续查失败 / 无 iCommentTime 基线（根本没在查）
+      const baseMs = entry.iCommentTime ? new Date(entry.iCommentTime).getTime() : (entry.since ? new Date(entry.since).getTime() : _nowMs);
+      const ageDays = Math.floor((_nowMs - baseMs) / 86400000);
+      if (ageDays >= _staleDays || (entry.commentCheckFails || 0) >= 2 || !entry.iCommentTime) {
+        staleAwaiting.push({ n: entry.n, person: entry.person, age_days: ageDays, comment_check_fails: entry.commentCheckFails || 0, no_baseline: !entry.iCommentTime });
+      }
     }
   }
-  if (flips.length > 0) {
+  if (_paWrites.length > 0) {
     withLock(PENDING_ACTIONS_PATH, () => {
       const fresh = readPendingActions();
-      for (const code of flips) { if (fresh[code]) fresh[code].state = 'APPLICANT_REPLIED'; }
+      for (const code of _paWrites) {
+        if (!fresh[code]) continue;
+        if (pa[code].state === 'APPLICANT_REPLIED') fresh[code].state = 'APPLICANT_REPLIED';
+        fresh[code].commentCheckFails = pa[code].commentCheckFails || 0;
+      }
       writePendingActions(fresh);
     });
   }
@@ -985,6 +1018,7 @@ function cmdList(limit, sinceDays) {
     pending_review_cases: pendingReview.map(([code, v]) => ({ instance_code: code, n: v.n, person: v.person, state: 'PENDING_REVIEW', since: v.since })),
     awaiting_count: awaitingCount,    // AWAITING_APPLICANT 件数（等待申请人回复，本轮跳过）
     flipped_count: flips.length,      // 本轮从 AWAITING → APPLICANT_REPLIED 的翻转数
+    awaiting_stale: staleAwaiting,    // Layer1（2026-08-18 #104）：疑似漏了申请人回复的 AWAITING 件（长期未翻转/连续查失败/无基线），人工核对
     batch_date: _bd,
     cleaned_closed: cleanedCount,
     reconciled_closed: reconciledClosed,
@@ -998,7 +1032,7 @@ function cmdList(limit, sinceDays) {
     chat_id: CFG.chatId,                // 当前发卡群，供 AI 核对/告知
     config_warning: !CFG.chatId ? '⚠️ 未配发卡群(LARK_AUDIT_CHAT_ID)——能审但出不了卡。让我帮你跑 doctor --fix --chat-id <当前群> 补上。' : null,  // ①首跑门轻量项
     definition_code_warning: defCodeWarning || null,  // 异常1：code 不在公司审批流清单时的诊断（否则 null）
-    note: `${defCodeWarning ? defCodeWarning + ' ' : ''}${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}${(process.env.QUAL_AUDIT_ROLE && roleDropped > 0) ? `；⚠️角色[${process.env.QUAL_AUDIT_ROLE}]过滤掉 ${roleDropped} 条非本岗位件（若疑漏审，核对 role_dropped_sample 或不设角色重跑）` : ''}。`,
+    note: `${defCodeWarning ? defCodeWarning + ' ' : ''}${(sinceDays && sinceDays > 0) ? `日期窗 ${sinceDays} 天(扫${windowScanned}条时间, 跳${windowCollectDropped}条领取节点)；` : '全量(无日期窗)；'}待办共 ${totalPending} 条(翻 ${pages} 页)；工作清单 ${worklist.length} 条，本轮返回 ${selected.length} 条${remaining > 0 ? `，剩余 ${remaining} 条下轮自动继续` : ''}；AWAITING 等待申请人回复 ${awaitingCount} 条${flips.length > 0 ? `（本轮翻转 ${flips.length} 条）` : ''}${staleAwaiting.length > 0 ? `；🔴疑似漏了申请人回复 ${staleAwaiting.length} 件(见 awaiting_stale)：#${staleAwaiting.map(s => s.n).join(' #')}——申请人可能已回复但没被识别翻转，请人工核对该件评论` : ''}；PENDING_REVIEW(待你 F/A/I/R 确认)跳过 ${pendingReview.length} 条${pendingReview.length > 0 ? `：#${pendingReview.map(([, v]) => v.n).join(' #')}` : ''}${reconciledClosed > 0 ? `；对账自愈：${reconciledClosed} 条已离开飞书待办，自动置 CLOSED` : ''}${(process.env.QUAL_AUDIT_ROLE && roleDropped > 0) ? `；⚠️角色[${process.env.QUAL_AUDIT_ROLE}]过滤掉 ${roleDropped} 条非本岗位件（若疑漏审，核对 role_dropped_sample 或不设角色重跑）` : ''}。`,
     tasks: selected.map(t => ({
       instance_code: t.instance_code,
       task_id: t.task_id,
