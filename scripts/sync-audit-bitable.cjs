@@ -35,6 +35,13 @@ const FLD_NOTE      = 'flduvXWjbc';   // 审核备注 (text)
 const FLD_ADVICE    = 'fldSwYZ2JS';   // AI首次建议 (select)
 const FLD_REWORK    = 'fldQdMPZXF';   // 是否返工 (select 是/否)
 const FLD_FIRSTPASS = 'fldTvF0xBe';   // 是否首过 (select 是/否)
+const FLD_DONE      = 'fldorPADgf';   // 完成时间 (datetime) = AI审核出结论时间(pa.since)（2026-08-18 王爷定）
+const FLD_CSTART    = 'fldih4Nx3P';   // 合同开始时间 (datetime) = 表内「合同明细」解析出的开始日
+const FLD_CEND      = 'fldqg6TzMm';   // 合同结束时间 (datetime) = 「合同明细」解析出的结束日
+const FLD_CDETAIL   = 'fldxarDLMM';   // 合同明细 (text) — 读它解析合同起止
+// 复用技能包已有的合同期限解析器（Plan B，2026-08-02）
+let parseContractDates;
+try { ({ parseContractDates } = require('../lib/deterministic-checker.js')); } catch (e) { parseContractDates = () => ({ startDate: null, endDate: null }); }
 
 // 归一化 verdict → 5 选项之一（容忍 emoji/空格）
 function normVerdict(v) {
@@ -122,7 +129,7 @@ for (let d = 0; d <= daysArg; d++) {
   if (!fs.existsSync(fp)) continue;
   try {
     for (const c of readJson(fp)) {
-      if (c.instanceCode && !allCases.has(c.instanceCode)) allCases.set(c.instanceCode, c);
+      if (c.instanceCode && !allCases.has(c.instanceCode)) { c._auditYmd = ymd; allCases.set(c.instanceCode, c); } // _auditYmd=审核台账日期，供完成时间兜底
     }
   } catch (e) { console.warn(`  WARN ${fp}: ${e.message}`); }
 }
@@ -158,6 +165,7 @@ const sortPath = path.join(TMP_DIR, 'sort.json');
 fs.writeFileSync(sortPath, JSON.stringify([{ field: 'fldkUIRhdW', desc: true }]), 'utf8');
 
 const icToRecordId = new Map();
+const codeToContractDetail = new Map();  // ic → 表内「合同明细」文本，供解析合同起止（2026-08-18）
 let offset = 0;
 let scannedTotal = 0;
 const remaining = new Set(allCases.keys());
@@ -165,8 +173,8 @@ const remaining = new Set(allCases.keys());
 while (offset < MAX_SCAN && remaining.size > 0) {
   const batchSize = Math.min(200, MAX_SCAN - offset);
   const _fieldIds = DRY
-    ? ['--field-id', FLD_SOURCE, '--field-id', FLD_RESULT, '--field-id', FLD_ADVICE, '--field-id', FLD_REWORK, '--field-id', FLD_FIRSTPASS]
-    : ['--field-id', FLD_SOURCE];
+    ? ['--field-id', FLD_SOURCE, '--field-id', FLD_CDETAIL, '--field-id', FLD_RESULT, '--field-id', FLD_ADVICE, '--field-id', FLD_REWORK, '--field-id', FLD_FIRSTPASS]
+    : ['--field-id', FLD_SOURCE, '--field-id', FLD_CDETAIL];
   const resp = larkBase([
     '+record-list',
     '--base-token', BASE_TOKEN,
@@ -191,7 +199,8 @@ while (offset < MAX_SCAN && remaining.size > 0) {
       const ic = decoded.split(':')[1];
       if (ic && remaining.has(ic)) {
         icToRecordId.set(ic, recordIds[i]);
-        if (DRY) curVals.set(ic, { result: rows[i][1], advice: rows[i][2], rework: rows[i][3], firstpass: rows[i][4] });
+        codeToContractDetail.set(ic, rows[i][1]);   // 合同明细在 field 序第2位
+        if (DRY) curVals.set(ic, { result: rows[i][2], advice: rows[i][3], rework: rows[i][4], firstpass: rows[i][5] });
         remaining.delete(ic);
       }
     } catch (e) {}
@@ -266,6 +275,19 @@ for (const [ic, c] of allCases) {
   fields[FLD_REWORK] = reworkFlag;
   if (firstPass)    fields[FLD_FIRSTPASS] = firstPass;
   if (noteText)     fields[FLD_NOTE]   = noteText;
+
+  // 日期字段（2026-08-18 王爷定，datetime 值=epoch 毫秒）
+  //   完成时间 = AI审核出结论时间：优先 pa[ic].since（落 PENDING 时记，不被 FAIR 覆盖），兜底审核台账日 _auditYmd。
+  const _since = (pa[ic] && pa[ic].since) || (c._auditYmd ? `${c._auditYmd.slice(0,4)}-${c._auditYmd.slice(4,6)}-${c._auditYmd.slice(6,8)}` : '');
+  const _doneMs = _since ? Date.parse(_since) : NaN;
+  if (!isNaN(_doneMs)) fields[FLD_DONE] = _doneMs;
+  //   合同开始/结束时间 = 解析表内「合同明细」文本（复用 Plan B 解析器；解析不出就不写，fail-open）。
+  let _cdRaw = codeToContractDetail.get(ic);
+  if (Array.isArray(_cdRaw)) _cdRaw = _cdRaw.map(x => (x && typeof x === 'object') ? (x.text || '') : String(x)).join('');
+  else if (_cdRaw && typeof _cdRaw === 'object') _cdRaw = _cdRaw.text || '';
+  const _cd = parseContractDates(String(_cdRaw || ''));
+  if (_cd.startDate) { const t = Date.parse(_cd.startDate); if (!isNaN(t)) fields[FLD_CSTART] = t; }
+  if (_cd.endDate)   { const t = Date.parse(_cd.endDate);   if (!isNaN(t)) fields[FLD_CEND]   = t; }
 
   const tmpFn = `upd_${ic.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
   fs.writeFileSync(path.join(TMP_DIR, tmpFn), JSON.stringify(fields), 'utf8');
