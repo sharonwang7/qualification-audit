@@ -2041,6 +2041,28 @@ function parseFairTokens(text) {
   return out;
 }
 
+// ── detectUnparsedFair（2026-08-18 王爷定·#113 漏执行事故兜底）──
+// 扫原文里【像 FAIR 指令但没解析成 token】的片段（如 "R#" 无编号、"通过#113" 无字母），返回告警——绝不静默丢。
+// 保守·宁漏报不误报：reA 要求字母前非字母数字，reB 要求别名后带 #，避免把"通过率81%""规则 R05"误当指令。
+function detectUnparsedFair(rawText, tokens) {
+  const s = String(rawText || '');
+  const parsedNs = new Set((tokens || []).map(t => t.n));
+  const warns = [];
+  let m;
+  const reA = /(?<![A-Za-z0-9])([FAIRS])\s*#\s*(?!\d)/gi;   // 字母+#+无数字，如 "R# 为什么"
+  while ((m = reA.exec(s)) !== null) {
+    warns.push({ kind: 'missing_number', letter: m[1].toUpperCase(), snippet: s.slice(m.index, m.index + 12).replace(/\s+/g, ' ').trim() });
+  }
+  const reB = /(通过|批准|放行|退回|驳回|拒绝|留言|询问|补充|异议|修订|重审)\s*[:：]?\s*#\s*(\d{1,4})/g;  // 别名+#+编号但无字母，如 "通过#113"
+  while ((m = reB.exec(s)) !== null) {
+    const n = parseInt(m[2], 10);
+    if (parsedNs.has(n)) continue;   // 该编号已被有效 token 覆盖（正常写法）→ 不告警
+    warns.push({ kind: 'alias_no_letter', n, snippet: m[0].replace(/\s+/g, ' ').trim() });
+  }
+  const seen = new Set();
+  return warns.filter(w => { const k = `${w.kind}|${w.letter || ''}|${w.n || ''}|${w.snippet}`; if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
 async function cmdFair(rawText) {
   if (!rawText || !String(rawText).trim()) throw new Error('fair 需要 <原始FAIR文本>，如 fair "通过：F#65  R#66，原因：..."');
 
@@ -2059,7 +2081,12 @@ async function cmdFair(rawText) {
   }
 
   const tokens = parseFairTokens(rawText);
-  if (!tokens.length) return { ok: false, error: '未解析到任何 FAIR 指令（需 F#/A#/I#/R#/S# + 编号，如 F#65）', raw: String(rawText) };
+  const unparsed = detectUnparsedFair(rawText, tokens);
+  if (!tokens.length) return { ok: false,
+    error: unparsed.length
+      ? `未解析到有效 FAIR 指令，但检测到 ${unparsed.length} 处【疑似指令未解析、未执行】：${unparsed.map(w => `「${w.snippet}」`).join('、')}。请用 F#N/A#N/I#N/R#N（字母+#+编号）格式补全后重发，勿静默忽略。`
+      : '未解析到任何 FAIR 指令（需 F#/A#/I#/R#/S# + 编号，如 F#65）',
+    raw: String(rawText), unparsed_warnings: unparsed };
   const results = [];
   const reviseNeeded = [];  // R# 命中项 → 调用方立即 spawn 子代理重审出修订卡（phase2，勿等下轮 list）
   let anyAction = false;
@@ -2115,6 +2142,10 @@ async function cmdFair(rawText) {
   if (anyAction) { try { cmdGenCard('1', '', 0); cardRefreshed = true; } catch (e) { console.error('[qual-audit] fair 刷卡失败（非致命，动作已执行）: ' + e.message); } }
   const okCount = results.filter(r => r.ok).length;
   const out = { ok: okCount > 0, fair_summary: `共 ${tokens.length} 条指令，成功 ${okCount} 条`, card_refreshed: cardRefreshed, results };
+  if (unparsed.length) {
+    out.unparsed_warnings = unparsed;
+    out.unparsed_hint = `⚠️ 另检测到 ${unparsed.length} 处【疑似 FAIR 指令未解析、未执行】：${unparsed.map(w => `「${w.snippet}」`).join('、')}。若确为指令，请用 F#N/A#N/I#N/R#N 补全编号后重发；务必转告用户，勿静默忽略。`;
+  }
   if (reviseNeeded.length) {
     out.revise_needed = reviseNeeded;
     out.revise_hint = `有 ${reviseNeeded.length} 件 R 修订：请【立即】对每个 instance_code spawn 一个子代理重审（case 已带 revise_reason 复审闸）→ write-result 覆盖 → gen-card 出修订卡，不要等下轮 list。`;
@@ -2814,6 +2845,7 @@ function cmdSafetyNetSpec(remaining) {
   else if (sub === 'reject') result = await cmdReject(a1, a2, a3, fairLetter);
   else if (sub === 'note') result = await cmdNote(a1, a2, fairLetter);
   else if (sub === 'fair') result = await cmdFair(a1);
+  else if (sub === 'test-fair') { const _t = parseFairTokens(a1); result = { tokens: _t, unparsed: detectUnparsedFair(a1, _t) }; }  // 无副作用·仅供单测/自查解析
   else if (sub === 'gen-card') result = cmdGenCard(a1, a2, a3);
   else if (sub === 'await-batch') result = cmdAwaitBatch(a1);
   else if (sub === 'batch-skip') result = cmdBatchSkip(a1);

@@ -55,6 +55,8 @@ node scripts/audit-tool.cjs note <instance_code> <expected_person> --fair-letter
 
 ### R 执行链（修订重新分析）
 
+> 🔴【入口唯一】本链**只能由 `fair '<原文>'` 解析出 R#N 触发**（fair 会置 `revise_needed` + APPLICANT_REPLIED）。**严禁**看到用户消息就跳过 `fair`、直接 write-result「手动改判」——那会绕过硬闸、漏掉同条消息里的其它 token（2026-08-18 #113 事故）。下面是 fair 触发**之后**的重审落盘步骤。
+
 ```
 1. 读 audit_reports，找完整 case 信息（instanceCode + fullAnalysis）
 2. 结合用户修订原因，执行完整三阶段分析（不能简化）
