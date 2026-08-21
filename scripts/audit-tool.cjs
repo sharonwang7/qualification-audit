@@ -251,8 +251,12 @@ const READ_DEFAULT_MAX = 4000;
 const SYNC_SCRIPT = process.env.QUAL_SYNC_SCRIPT || path.join(SKILL_ROOT, 'scripts', 'sync-audit-bitable.cjs');
 function spawnAutoSync() {
   if (!fs.existsSync(SYNC_SCRIPT)) return;
-  const child = spawn('node', [SYNC_SCRIPT, '--days=7'], {
-    detached: true, stdio: 'ignore', env: process.env, shell: true, windowsHide: true
+  // 2026-08-19 弹窗根治：原 `spawn('node', …, {shell:true})` 会起 cmd.exe 包裹 node【孙进程】，detached 下
+  //   windowsHide 只压得住最外层 cmd、压不住孙进程的控制台窗（与 connector 2026-07-24 同款病根）。
+  //   approve/reject/note 每案触发一次 → 批量 fair 弹几十个窗。正解=直接 spawn node 全路径(process.execPath)、
+  //   无 shell/无 shim → windowsHide 对 node 自身生效、无窗（与本文件 L~2473 write-result 后的 sync 写法统一）。
+  const child = spawn(process.execPath, [SYNC_SCRIPT, '--days=7'], {
+    detached: true, stdio: 'ignore', env: process.env, windowsHide: true
   });
   child.unref();
 }
