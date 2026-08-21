@@ -1739,7 +1739,8 @@ function cmdRevisionCard(instanceCode, round) {
   if (CFG.cardBotAccount) process.env.QUAL_CARD_BOT_ACCOUNT = CFG.cardBotAccount;
   else delete process.env.QUAL_CARD_BOT_ACCOUNT;
 
-  const psArgs = ['-File', script, '-InstanceCode', instanceCode, '-ChatId', chatId];
+  // 2026-08-19 弹窗残留根治：Node windowsHide 对 powershell/conhost 有时压不住闪窗 → 叠加 PS 原生 -WindowStyle Hidden。
+  const psArgs = ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', script, '-InstanceCode', instanceCode, '-ChatId', chatId];
   const r = round ? parseInt(round, 10) : 1;
   if (r > 1) { psArgs.push('-Round'); psArgs.push(String(r)); }
   const o = execFileSync('powershell', psArgs, {
@@ -2374,7 +2375,8 @@ function cmdGenCard(round, date, remaining) {
     //   原硬编码 null 导致【永远 POST 新卡、从不更新】→ R 修订/重审后卡不刷新、停在旧判断（zizhi 实测 #83 半旧卡的真因，updated=false 坐实）。
     //   key 仍含 roundTag：跨轮=新卡(链式卡不变)、同轮重跑=PATCH 同一张。QUAL_CARD_NEW=1 强制另起新卡（兼容）。
     const existingMsgId = (process.env.QUAL_CARD_NEW === '1') ? null : (cardIds[key] || null);
-    const psArgs = ['-File', script];
+    // 2026-08-19 弹窗残留根治：叠加 PS 原生 -WindowStyle Hidden（Node windowsHide 对 powershell/conhost 偶尔压不住）。
+    const psArgs = ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-File', script];
     if (r > 1) { psArgs.push('-Round'); psArgs.push(String(r)); }
     if (date) { psArgs.push('-Date'); psArgs.push(date); }
     if (rem > 0) { psArgs.push('-Remaining'); psArgs.push(String(rem)); }
