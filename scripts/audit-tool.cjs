@@ -249,7 +249,12 @@ const READ_DEFAULT_MAX = 4000;
 
 // approve/reject/note 成功后 fire-and-forget 同步 bitable（兼容 大公子 和 OpenClaw）
 const SYNC_SCRIPT = process.env.QUAL_SYNC_SCRIPT || path.join(SKILL_ROOT, 'scripts', 'sync-audit-bitable.cjs');
+// 批量抑制开关（2026-08-19）：fair 批量执行期间置 true，让每案 approve/reject/note 里的 spawnAutoSync 变 no-op；
+//   批量结束后由 cmdFair 统一 spawnAutoSync 一次。sync 脚本 --days=7 全量刷，一次即覆盖整批 → 免去 N 个冗余进程。
+//   单独 CLI approve / 单独 gen-card（cron）不经 cmdFair，开关维持 false，同步行为不变。
+let _batchSyncSuppressed = false;
 function spawnAutoSync() {
+  if (_batchSyncSuppressed) return;
   if (!fs.existsSync(SYNC_SCRIPT)) return;
   // 2026-08-19 弹窗根治：原 `spawn('node', …, {shell:true})` 会起 cmd.exe 包裹 node【孙进程】，detached 下
   //   windowsHide 只压得住最外层 cmd、压不住孙进程的控制台窗（与 connector 2026-07-24 同款病根）。
@@ -2096,6 +2101,7 @@ async function cmdFair(rawText) {
   let anyAction = false;
   let chainStopped = false;
   const STOP_CODES = [1390001];  // C06: 这些错误码会触发链停
+  _batchSyncSuppressed = true;   // 批量期间抑制每案 spawnAutoSync，末尾统一同步一次（省 N 个冗余进程/弹窗）
   for (const t of tokens) {
     if (chainStopped) {
       results.push({ token: `${t.letter}#${t.n}`, ok: false, _chainStopped: true, error: '链已停（上游 token 触发了不可恢复错误）' });
@@ -2144,6 +2150,10 @@ async function cmdFair(rawText) {
   }
   let cardRefreshed = false;
   if (anyAction) { try { cmdGenCard('1', '', 0); cardRefreshed = true; } catch (e) { console.error('[qual-audit] fair 刷卡失败（非致命，动作已执行）: ' + e.message); } }
+  // 批量同步收口（2026-08-19）：解除抑制后，若本批有实际动作，统一 spawnAutoSync 一次
+  //   （--days=7 全量刷即覆盖整批；独立于 gen-card，gen-card 失败也能同步）。
+  _batchSyncSuppressed = false;
+  if (anyAction) { try { spawnAutoSync(); } catch (e) {} }
   const okCount = results.filter(r => r.ok).length;
   const out = { ok: okCount > 0, fair_summary: `共 ${tokens.length} 条指令，成功 ${okCount} 条`, card_refreshed: cardRefreshed, results };
   if (unparsed.length) {
