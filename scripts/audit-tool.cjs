@@ -410,8 +410,10 @@ function buildTrademarkRegIndex() {
 
 // ── 检查审批实例 iCommentTime 之后是否有新的非 AI 评论（申请人已回复）──
 // 返回：true=有新的申请人回复；false=确无新回复；null=查询出错（区别于 false，供上层累计告警，不再静默当无回复）。
-// 三层加固（2026-08-18 王爷定·#104 漏翻转事故）：双身份(bot→user)兜底——两种身份看到的评论可能不同，任一识别到新回复即算回复；
-//   仅当两身份都【出错】才返回 null。原来单 bot 身份 + 出错静默 return false，件会永远卡 AWAITING 无告警。
+// #104 漏翻转事故修复（2026-08-18 王爷定）：真实修复 = 作者用 commentator 字段 + 展开 replies 嵌套 + 出错返回 null 供上层告警（下方均保留）。
+//   原来单 bot + 出错静默 return false，件会永远卡 AWAITING 无告警 → 已改为 null 告警。
+//   ⚠️【2026-09-03 修正】当时同批加的"双身份 bot→user 兜底"是无效假设：comments 接口只支持 bot、user 必报 99991668，
+//   user 分支从未生效还把结果污染成 null（假 awaiting_stale）→ 已删除，hasNewUserComment 只用 bot（见其函数注释）。
 function _checkNewUserCommentOnce(instanceCode, afterIsoTime, identity) {
   const url = `/open-apis/approval/v4/instances/${instanceCode}/comments`;
   const data = larkApi('GET', url, { user_id: USER_OPEN_ID, user_id_type: 'open_id' }, identity);
@@ -441,16 +443,15 @@ function _checkNewUserCommentOnce(instanceCode, afterIsoTime, identity) {
   });
 }
 function hasNewUserComment(instanceCode, afterIsoTime) {
-  let sawError = false;
-  for (const ident of ['bot', 'user']) {
-    try {
-      if (_checkNewUserCommentOnce(instanceCode, afterIsoTime, ident)) return true; // 任一身份命中即算回复
-    } catch (e) {
-      sawError = true;
-      console.error(`[hasNewUserComment] 查评论失败(${instanceCode}, --as ${ident}): ${e.message}`);
-    }
+  // comments 接口仅支持 tenant_access_token（bot）；user token 会报 99991668，
+  // 双身份轮询导致 sawError 恒 true → commentCheckFails 无限累计 → awaiting_stale 假警报。
+  // #104 真实修复在 _checkNewUserCommentOnce 内（replies 展开 + commentator 判定 + 毫秒闸），与身份无关，删 user 分支不复发。
+  try {
+    return _checkNewUserCommentOnce(instanceCode, afterIsoTime, 'bot');
+  } catch (e) {
+    console.error(`[hasNewUserComment] 查评论失败(${instanceCode}, --as bot): ${e.message}`);
+    return null; // 仅 bot 真失败时才视为查询出错（token 失效等真实故障）
   }
-  return sawError ? null : false; // 两身份都没查到新回复：有错→null(疑似卡死·上层告警)，无错→false(确无回复)
 }
 
 // ── comments：拉取审批实例评论（申请人回复 / AI审核评论），手动复审前核对，杜绝"查错接口=假空=漏回复" ──
