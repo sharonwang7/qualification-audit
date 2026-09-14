@@ -59,8 +59,13 @@ QUAL_AUDIT_ROLE=feifaren  # 非法人岗 — 只加载 common + feifaren
 1. **list** → `node scripts/audit-tool.cjs list [N] [--since 天] [--all]`
    拿待审清单（最新 12 条/轮）。返回格式 → [common/audit-tool-ref.md](common/audit-tool-ref.md)
 
-2. **逐条 spawn** 子代理（用下面模板）。父只编排、不跑 case。
-   判断规格 → [common/child-judge.md](common/child-judge.md) | 附件读取 → [common/attachment-reading-spec.md](common/attachment-reading-spec.md)
+2. **逐条跑预审管线**（2026-09-14 起替代 spawn 子代理；父直接跑，不 spawn，可并发 2 到 3 条，勿超 4）：
+   ```
+   node D:\agent-hub\projects\P09-资质审核同步化\src\pipeline.cjs <instance_code> --mode ledger --skill-ledger --auto-note
+   ```
+   返回 JSON：`ledger` 以 `written` 开头 = 已落盘（等价于原子代理 write-result ok:true）；`verdict=跳过` → 自行 `batch-skip`；`error` 非空 → 按原「子代理失败」处理（batch-fail，下轮重现）。`--auto-note` 让「需补充」结论直接写评论 @申请人并置 AWAITING_APPLICANT，不等 I#（王爷 2026-09-14 定，不设轮数上限）；APPLICANT_REPLIED 的件同样跑这条命令重审。R# 修订也跑这条命令，`case` 会把 revise_reason 注入判断。
+   🔴 多数新件已由飞书审批事件在提交时触发过管线（见 P09 `docs/事件触发验证-20260914.md`），list 里 pa_state=PENDING_REVIEW 的件不要重跑，直接进 gen-card。
+   下面的「子代理 spawn 模板」仅作管线不可用时的降级备用。判断规格 → [common/child-judge.md](common/child-judge.md)
 
 3. **收网**：register-orphans → batch-fail（未落盘件）→ gen-card。
    OpenClaw 分支 `sessions_yield` 等推送、大公子同步等齐。
