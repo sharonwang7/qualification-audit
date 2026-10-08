@@ -29,12 +29,16 @@
 
 > 🔴 **`--fair-letter` 必填（2026-07-21）**：approve/reject/note 都必须带用户敲的**原始 FAIR 字母**。工具持有唯一映射 `F=approve / A=reject / I=note / R=revise`，会校验「字母↔子命令」一致，不符即 fail-closed 拒绝。你只管**照抄用户字母**，别再凭记忆挑动词（防 R/A 反接英文先验的误 reject，2026-07-21 事故）。**R 永不走这三个动作**——R=修订走 write-result 重判。
 
-```bash
-# 放行（工具内部：先写评论，成功再通过）；用户敲 F → --fair-letter F
-node scripts/audit-tool.cjs approve <instance_code> <expected_person> --fair-letter F
+> 🔴 **CLI 入口已移除（2026-10-08）**：`approve`/`reject`/`note` 命令的 CLI 入口已移除，**只能通过 `fair` 命令执行审批动作**。这是为了防止 agent 在 write-result 后直接调用 approve，绕过用户确认。内部函数 `cmdApprove`/`cmdReject`/`cmdNote` 仍保留，供 `cmdFair` 调用。
 
-# 反对（工具内部：先写评论+原因，成功再拒绝）；用户敲 A → --fair-letter A
-node scripts/audit-tool.cjs reject <instance_code> <reason_textfile> <expected_person> --fair-letter A
+```bash
+# ✅ 正确方式：通过 fair 命令执行（唯一入口）
+node scripts/audit-tool.cjs fair "通过：F#159 F#162 F#163"
+
+# ❌ 错误方式：直接调用 approve/reject/note（已移除 CLI 入口）
+# node scripts/audit-tool.cjs approve <instance_code> <expected_person> --fair-letter F  # 不再可用
+# node scripts/audit-tool.cjs reject <instance_code> <reason_textfile> <expected_person> --fair-letter A  # 不再可用
+# node scripts/audit-tool.cjs note <instance_code> <expected_person> --fair-letter I  # 不再可用
 
 # 查 #N 对应 instanceCode
 node scripts/audit-tool.cjs lookup-case-by-n <N>

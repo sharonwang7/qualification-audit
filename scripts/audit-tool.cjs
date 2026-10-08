@@ -2877,9 +2877,9 @@ function cmdSafetyNetSpec(remaining) {
   else if (sub === 'cache-from-doc') result = await cmdCacheFromDoc(a1, ...args.slice(3));
   else if (sub === 'comment-from-doc') result = await cmdCommentFromDoc(a1, a2, a3);
   else if (sub === 'write-result') result = cmdWriteResult(a1, a2);
-  else if (sub === 'approve') result = await cmdApprove(a1, a2, fairLetter);
-  else if (sub === 'reject') result = await cmdReject(a1, a2, a3, fairLetter);
-  else if (sub === 'note') result = await cmdNote(a1, a2, fairLetter);
+  // 🔴 2026-10-08 移除 approve/reject/note CLI 入口，防止 agent 越权
+  // 审批动作（通过/退回/留言）只能通过 fair 命令执行，确保等待用户确认
+  // 内部函数 cmdApprove/cmdReject/cmdNote 仍保留，供 cmdFair 调用
   else if (sub === 'fair') result = await cmdFair(a1);
   else if (sub === 'test-fair') { const _t = parseFairTokens(a1); result = { tokens: _t, unparsed: detectUnparsedFair(a1, _t) }; }  // 无副作用·仅供单测/自查解析
   else if (sub === 'gen-card') result = cmdGenCard(a1, a2, a3);
@@ -2907,10 +2907,7 @@ function cmdSafetyNetSpec(remaining) {
       '  node scripts/audit-tool.cjs cache-from-doc <doc_id> [<caseN>:<instance_code> ...]',
       '  node scripts/audit-tool.cjs comment-from-doc <instance_code> <doc_id> <case_number>',
       '  node scripts/audit-tool.cjs write-result <instance_code> <result_json_file>',
-      '  node scripts/audit-tool.cjs approve <instance_code> [expected_person] --fair-letter F   # 必带用户原始字母；person 做串号硬校验',
-      '  node scripts/audit-tool.cjs reject <instance_code> <reason_file> [expected_person] --fair-letter A',
-      '  node scripts/audit-tool.cjs note <instance_code> [expected_person] --fair-letter I   # R=修订不走这三个动作，改 write-result 重判',
-      '  node scripts/audit-tool.cjs fair "<用户整条FAIR原文>"   # 【首选】一条命令批量执行 F#/A#/I#/R#/S#：解析+逐条approve/reject/note/scope-dismiss+刷卡；需 QUAL_PROFILE=prod + QUAL_ACTOR_OPEN_ID',
+      '  node scripts/audit-tool.cjs fair "<用户整条FAIR原文>"   # 【唯一入口】审批动作（通过/退回/留言）只能通过 fair 执行，确保等待用户确认；解析 F#/A#/I#/R#/S# 并逐条执行；需 QUAL_PROFILE=prod + QUAL_ACTOR_OPEN_ID',
       '  node scripts/audit-tool.cjs gen-card [round] [date_YYYYMMDD] [remaining]   # 需设 QUAL_CARD_SCRIPT；本批未全 settled 会拒发(防空卡)，先 await-batch；应急 QUAL_FORCE_CARD=1',
       '  node scripts/audit-tool.cjs await-batch [timeoutSec]   # 父 spawn 完调此，阻塞等本批子代理全部 settled 或超时(默认660s，超时标记放行)，再 gen-card',
       '  node scripts/audit-tool.cjs batch-skip <instance_code>  # 子代理判 in_scope=false/should_skip 时登记 skip，让收网不空等',

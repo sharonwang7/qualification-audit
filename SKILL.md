@@ -140,6 +140,9 @@ node scripts/audit-tool.cjs gen-card [轮次] "" [剩余条数]
 ## FAIR 执行
 
 🔴🔴【铁律·唯一入口】收到**任何含 FAIR 意图**的消息（`F#/A#/I#/R#/S#` 或「通过/退回/留言/异议/修订」+编号）：**第一步无条件**把【整条原文一字不改】交给 `fair '<原文>'`（确定性解析、多 token 全吃）；**严禁**手动 `write-result`／自己改判／只做一部分／漏 token。先 `fair` 再处理其它自然语言追问。
+
+🔴🔴【越权防护·2026-10-08】`approve`/`reject`/`note` 命令的 **CLI 入口已移除**，**只能通过 `fair` 命令执行审批动作**。这是为了防止 agent 在 `write-result` 后直接调用 `approve`，绕过用户确认。即使 `write-result` 成功，也必须等待用户发送 F#/A#/I# 命令，通过 `fair` 执行。内部函数 `cmdApprove`/`cmdReject`/`cmdNote` 仍保留，供 `cmdFair` 调用。
+
 🔴 `fair` 返回带 `unparsed_warnings`（疑似指令没解析成 token，如「R#」缺编号）→ **原样转告用户补 `F#N` 重发、绝不静默忽略**。
 > ⚠️ 反例（2026-08-18 #113）：「通过：F#113 + R# 无编号追问」→ 手动 write-result 改 #114、**漏掉 F#113**，根因=绕过 `fair`。
 
