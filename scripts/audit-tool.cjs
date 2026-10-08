@@ -913,6 +913,25 @@ function cmdList(limit, sinceDays) {
     windowCollectDropped = w.droppedCollect;
   }
 
+  // 🔴 日期窗误伤已回复件修复（2026-10-08·#116/#120）：7 天窗只对【全新件】生效，
+  //    绝不能卡住"已在审核流程内、申请人已回复(AWAITING/APPLICANT_REPLIED)且在待办里的件"。
+  //    否则申请人的回复一旦晚到（发起已超窗）就永远追不上窗 → 翻转了也进不了工作清单 → 不重审。
+  //    处理：把 pa 开放态(openStates)且仍在【全量 tasks】里的件，强行并回 candidateTasks（无视日期窗）。
+  //    ∪ 语义：满足 ①窗口内新件 或 ②开放态且在待办，任一即入清单。
+  if (sinceDays && sinceDays > 0) {
+    const openStates = new Set(['PENDING_REVIEW', 'AWAITING_APPLICANT', 'APPLICANT_REPLIED']);
+    const liveByCode = new Map(tasks.map(t => [t.instance_code, t]));
+    const openLive = [];
+    for (const [code, entry] of Object.entries(pa)) {
+      if (code === '__meta') continue;
+      if (entry && openStates.has(entry.state) && liveByCode.has(code)) openLive.push(liveByCode.get(code));
+    }
+    if (openLive.length > 0) {
+      const seen = new Set(candidateTasks.map(t => t.instance_code));
+      for (const t of openLive) if (!seen.has(t.instance_code)) candidateTasks.push(t);
+    }
+  }
+
   // 2a. ① FLIP：对 pa 里【全部】AWAITING 件检查申请人回复（解耦 worklist 成员资格）。
   // 必须在 BUILD_WL 之前跑，确保刚翻转的件能以 APPLICANT_REPLIED 身份进入本轮 worklist。
   // 网络判定在锁外，仅翻转写入放锁内，避免长时间持锁。
